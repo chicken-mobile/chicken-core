@@ -4,15 +4,22 @@
   - CVE-2013-1874: ./.csirc is no longer loaded from the current directory
     upon startup of csi, which could lead to untrusted code execution.
     (thanks to Florian Zumbiehl)
-  - On *nix, the qs procedure now single-quotes everything instead of relying
-    on a blacklist of shell characters to be escaped.  On Windows, it properly
-    duplicates double-quote characters.  (thanks to Florian Zumbiehl)
+  - CVE-2013-2024: On *nix, the qs procedure now single-quotes everything
+    instead of relying on a blacklist of shell characters to be escaped.
+    On Windows, it properly duplicates double-quote characters.  (thanks
+    to Florian Zumbiehl)
+  - CVE-2013-2075: Use POSIX poll() in other places where select() was
+    still being used.  (thanks to Florian Zumbiehl and Joerg Wittenberger)
 
 - Tools
   - csc: added "-oi"/"-ot" options as alternatives to "-emit-inline-file"
     and "-emit-type-file", respectively; "-n" has been deprecated.
   - chicken-install now also accepts full URI syntax for proxy environment
     variables (thanks to Michele La Monaca)
+
+- Syntax
+  - Added the aliases "&optional" and "&rest" as alternatives to "#!optional"
+    and "#!rest" in type-declarations (suggested by Joerg Wittenberger).
 
 - Compiler
   - the "inline" declaration does not force inlining anymore as recursive
@@ -24,6 +31,7 @@
   - write and pp now correctly use escape sequences for control characters
      (thanks to Florian Zumbiehl)
   - posix: memory-mapped file support for Windows (thanks to "rivo")
+  - posix: find-file's test argument now also accepts SRE forms.
 
 - Runtime system
   - Special events in poll() are now handled, avoiding hangs in threaded apps.
