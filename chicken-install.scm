@@ -644,7 +644,6 @@
 
   (define (delete-stale-binaries)
     (print* "deleting stale binaries ...")
-    (print* "deleting stale binaries ...")
     (find-files "." test: `(seq (* any) "." (or "o" "so" "dll" "a"))
 		action: (lambda (f _)
 			  (print* " " f)
