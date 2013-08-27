@@ -519,7 +519,7 @@ EOF
     (set! compile-options (append pic-options '("-DC_SHARED") compile-options))
     (set! link-options
       (cons (cond
-             (osx (if lib "-dynamiclib" "-bundle"))
+             (osx (if lib "-dynamiclib" "-bundle -Wl,-headerpad_max_install_names -headerpad_max_install_names"))
              (else "-shared")) link-options))
     (set! shared #t) )
 
