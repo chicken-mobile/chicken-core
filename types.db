@@ -1014,6 +1014,9 @@
 (program-name (#(procedure #:clean #:enforce) program-name (#!optional string) string))
 (promise? (#(procedure #:pure #:predicate (struct promise)) promise? (*) boolean))
 
+(make-promise (#(procedure #:enforce) make-promise (*) (struct promise))
+              (((struct promise)) #(1)))
+
 (put! (#(procedure #:clean #:enforce) put! (symbol symbol *) undefined)
       ((symbol symbol *)
        (##core#inline_allocate ("C_a_i_putprop" 8) #(1) #(2) #(3))))
@@ -1196,7 +1199,7 @@
 (constantly (forall (a) (#(procedure #:pure) constantly (a) (procedure (#!rest) a))))
 (disjoin (#(procedure #:clean #:enforce) disjoin (#!rest (procedure (*) *)) (procedure (*) *)))
 (each (#(procedure #:clean #:enforce) each (#!rest procedure) procedure))
-(flatten (#(procedure #:clean #:enforce) flatten (pair) list))
+(flatten (#(procedure #:clean #:enforce) flatten (#!rest *) list))
 (flip (#(procedure #:clean #:enforce) flip ((procedure (* *) . *)) (procedure (* *) . *)))
 (identity (forall (a) (#(procedure #:pure) identity (a) a)))
 (intersperse (#(procedure #:clean #:enforce) intersperse (list *) list))
@@ -1765,7 +1768,7 @@
 (prot/none fixnum)
 (prot/read fixnum)
 (prot/write fixnum)
-(read-symbolic-link (#(procedure #:clean #:enforce) read-symbolic-link (string) string))
+(read-symbolic-link (#(procedure #:clean #:enforce) read-symbolic-link (string #!optional boolean) string))
 (regular-file? (#(procedure #:clean #:enforce) regular-file? ((or string fixnum)) boolean))
 (seconds->local-time (#(procedure #:clean #:enforce) seconds->local-time (#!optional number) (vector fixnum fixnum fixnum fixnum fixnum fixnum fixnum fixnum boolean fixnum)))
 (seconds->string (#(procedure #:clean #:enforce) seconds->string (#!optional number) string))
@@ -2506,6 +2509,9 @@
 (u8vector? (#(procedure #:pure #:predicate (struct u8vector)) u8vector? (*) boolean))
 
 (write-u8vector (#(procedure #:enforce) write-u8vector ((struct u8vector) #!optional output-port fixnum fixnum) undefined))
+
+(number-vector? (#(procedure #:pure #:predicate (or (struct u8vector) (struct u16vector) (struct s8vector) (struct s16vector) (struct u32vector) (struct s32vector) (struct f32vector) (struct f64vector))) number-vector? (*) boolean))
+(##sys#srfi-4-vector? (#(procedure #:pure #:predicate (or (struct u8vector) (struct u16vector) (struct s8vector) (struct s16vector) (struct u32vector) (struct s32vector) (struct f32vector) (struct f64vector))) ##sys#srfi-4-vector? (*) boolean))
 
 
 ;; srfi-69

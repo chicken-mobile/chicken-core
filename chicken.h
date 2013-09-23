@@ -61,16 +61,8 @@
 
 /* Kind of platform */
 
-#ifndef C_SIXTY_FOUR
-# if defined (__alpha__) || defined(__ia64__) || defined(__x86_64__) || defined(__LP64__) || defined(__powerpc64__)
-#   define C_SIXTY_FOUR
-# elif (defined(__sparc_v9__) || defined(__sparcv9)) && defined(__arch64__)
-#   define C_SIXTY_FOUR
-# elif defined(__mips64) && (!defined(__GNUC__) || _MIPS_SZPTR == 64)
-#   define C_SIXTY_FOUR
-# elif defined(__MINGW64__)
-#   define C_SIXTY_FOUR
-# endif
+#if defined(__LP64__) || defined(_LP64) || defined(__MINGW64__) || defined(_WIN64)
+# define C_SIXTY_FOUR
 #endif
 
 #if defined(__APPLE__) && defined(__MACH__)
@@ -86,6 +78,10 @@
 #endif
 
 #if defined(__MINGW32__) || defined(__WATCOMC__) || defined(__MWERKS__)
+/*
+ * XXX This should probably be renamed or changed because it's misleading.
+ * For example, Haiku is not a Unix either, but this doesn't get defined there.
+ */
 # define C_NONUNIX
 #endif
 
@@ -93,7 +89,7 @@
 # define C_SOLARIS
 #endif
 
-#ifdef __MINGW64__
+#if defined(__MINGW64__) || defined(_WIN64)
 # define C_LLP
 #endif
 
@@ -110,6 +106,7 @@
 #include <time.h>
 #include <math.h>
 
+/* This check is exceedingly strange */
 #if !defined(C_NONUNIX) || defined(__MINGW32__) || defined(__WATCOMC__)
 # include <unistd.h>
 # include <inttypes.h>
@@ -556,7 +553,7 @@ static inline int isinf_ld (long double x)
 #define C_S64_MIN    INT64_MIN
 #define C_S64_MAX    INT64_MAX
 
-#if defined(C_LLP) && defined(C_SIXTY_FOUR)
+#if defined(C_LLP)
 # define C_long                   C_s64
 # ifndef LONG_LONG_MAX
 #  define C_LONG_MAX              LLONG_MAX
@@ -1005,7 +1002,7 @@ extern double trunc(double);
 #define C_save(x)	           (*(--C_temporary_stack) = (C_word)(x))
 #define C_adjust_stack(n)          (C_temporary_stack -= (n))
 #define C_rescue(x, i)             (C_temporary_stack[ i ] = (x))
-#define C_save_rest(s, c, n)  	   for(va_start(v, s); c-- > (n); C_save(va_arg(v, C_word)))
+#define C_save_rest(s, c, n)  	   do { if((C_temporary_stack - (c - (n))) < C_temporary_stack_limit) C_temp_stack_overflow(); for(va_start(v, s); c-- > (n); C_save(va_arg(v, C_word))); }while(0)
 #define C_rest_count(c)            ((C_temporary_stack_bottom - C_temporary_stack) - (c))
 #define C_restore                  (*(C_temporary_stack++))
 #define C_heaptop                  ((C_word **)(&C_fromspace_top))
@@ -1586,6 +1583,7 @@ C_varextern C_TLS time_t C_startup_time_seconds;
 C_varextern C_TLS C_word
   *C_temporary_stack,
   *C_temporary_stack_bottom,
+  *C_temporary_stack_limit,
   *C_stack_limit;
 C_varextern C_TLS C_long
   C_timer_interrupt_counter,
@@ -1593,7 +1591,11 @@ C_varextern C_TLS C_long
 C_varextern C_TLS C_byte
   *C_fromspace_top,
   *C_fromspace_limit;
+#ifdef HAVE_SIGSETJMP
+C_varextern C_TLS sigjmp_buf C_restart;
+#else
 C_varextern C_TLS jmp_buf C_restart;
+#endif
 C_varextern C_TLS void *C_restart_address;
 C_varextern C_TLS int C_entry_point_status;
 C_varextern C_TLS int C_gui_mode;
@@ -1662,6 +1664,7 @@ C_fctexport void *C_register_lf2(C_word *lf, int count, C_PTABLE_ENTRY *ptable);
 C_fctexport void C_unregister_lf(void *handle);
 C_fctexport C_char *C_dump_trace(int start);
 C_fctexport void C_fcall C_clear_trace_buffer(void) C_regparm;
+C_fctexport C_word C_resize_trace_buffer(C_word size);
 C_fctexport C_word C_fetch_trace(C_word start, C_word buffer);
 C_fctexport C_word C_fcall C_string(C_word **ptr, int len, C_char *str) C_regparm;
 C_fctexport C_word C_fcall C_static_string(C_word **ptr, int len, C_char *str) C_regparm;
@@ -1687,6 +1690,7 @@ C_fctexport void C_bad_min_argc(int c, int n) C_noret;
 C_fctexport void C_bad_argc_2(int c, int n, C_word closure) C_noret;
 C_fctexport void C_bad_min_argc_2(int c, int n, C_word closure) C_noret;
 C_fctexport void C_stack_overflow(void) C_noret;
+C_fctexport void C_temp_stack_overflow(void) C_noret;
 C_fctexport void C_unbound_error(C_word sym) C_noret;
 C_fctexport void C_no_closure_error(C_word x) C_noret;
 C_fctexport void C_div_by_zero_error(char *loc) C_noret;
@@ -1726,7 +1730,7 @@ C_fctexport C_word C_fcall C_equalp(C_word x, C_word y) C_regparm;
 C_fctexport C_word C_fcall C_set_gc_report(C_word flag) C_regparm;
 C_fctexport C_word C_fcall C_start_timer(void) C_regparm;
 C_fctexport C_word C_exit_runtime(C_word code);
-C_fctexport C_word C_fcall C_display_flonum(C_word port, C_word n) C_regparm;
+C_fctexport C_word C_fcall C_display_flonum(C_word port, C_word n) C_regparm; /* OBSOLETE */
 C_fctexport C_word C_fcall C_set_print_precision(C_word n) C_regparm;
 C_fctexport C_word C_fcall C_get_print_precision(void) C_regparm;
 C_fctexport C_word C_fcall C_read_char(C_word port) C_regparm;
@@ -1781,6 +1785,7 @@ C_fctexport void C_ccall C_allocate_vector(C_word c, C_word closure, C_word k, C
 C_fctexport void C_ccall C_string_to_symbol(C_word c, C_word closure, C_word k, C_word string) C_noret;
 C_fctexport void C_ccall C_build_symbol(C_word c, C_word closure, C_word k, C_word string) C_noret;
 C_fctexport void C_ccall C_flonum_fraction(C_word c, C_word closure, C_word k, C_word n) C_noret;
+C_fctexport void C_ccall C_flonum_rat(C_word c, C_word closure, C_word k, C_word n) C_noret;
 C_fctexport void C_ccall C_quotient(C_word c, C_word closure, C_word k, C_word n1, C_word n2) C_noret;
 C_fctexport void C_ccall C_number_to_string(C_word c, C_word closure, C_word k, C_word num, ...) C_noret;
 C_fctexport void C_ccall C_fixnum_to_string(C_word c, C_word closure, C_word k, C_word num) C_noret;

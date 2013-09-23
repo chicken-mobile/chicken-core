@@ -191,6 +191,14 @@
   (cond (#t => 'ok)))
 )
 
+(t 1 (let ((=> 1))
+       (cond (#f 'false)
+             (#t =>))))
+
+(t 3 (let ((=> 1))
+       (cond (#f 'false)
+             (#t => 2 3))))
+
 (t '(3 4)
 (let ((foo 3))
   (let-syntax ((bar (syntax-rules () ((_ x) (list foo x)))))
@@ -843,6 +851,19 @@
             (import scheme)
             (define (always-two) (+ (one#always-one) 1)))))
 
+;;; SRFI-2 (and-let*)
+
+(t 1 (and-let* ((a 1)) a))
+(f (eval '(and-let* ((a 1 2 3)) a)))
+(t 2 (and-let* ((a 1) (b (+ a 1))) b))
+(t 3 (and-let* (((or #f #t))) 3))
+(f (eval '(and-let* ((or #f #t)) 1)))
+(t 4 (and-let* ((c 4) ((equal? 4 c))) c))
+(t #f (and-let* ((c 4) ((equal? 5 c))) (error "not reached")))
+(t #f (and-let* (((= 4 5)) ((error "not reached 1"))) (error "not reached 2")))
+(t 'foo (and-let* (((= 4 4)) (a 'foo)) a))
+(t #f (and-let* ((a #f) ((error "not reached 1"))) (error "not reached 2")))
+
 ;;; SRFI-26
 
 ;; Cut
@@ -1079,3 +1100,19 @@ take
       ((_) (begin (define req 2) (display req) (newline)))))
   (bar)
   (assert (eq? req 1)))
+
+
+;; letrec vs. letrec*
+
+;;XXX this fails - the optimizer substitutes "foo" for it's known constant value
+#;(t (void) (letrec ((foo 1)
+		   (bar foo))
+	    bar))
+
+(t (void) (letrec ((foo (gc))
+		   (bar foo))
+	    bar))
+
+(t 1 (letrec* ((foo 1)
+	       (bar foo))
+	      bar))

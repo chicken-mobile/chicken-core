@@ -422,6 +422,7 @@
 	    `(,%let-values (,(car vbindings))
 			   ,(fold (cdr vbindings))) ) ) ))))
 
+;;XXX do we need letrec*-values ?
 (##sys#extend-macro-environment
  'letrec-values '()
  (##sys#er-transformer
@@ -489,6 +490,7 @@
 	      (cond [(not (pair? b)) `(##core#if ,b ,(fold bs2) #f)]
 		    [(null? (cdr b)) `(##core#if ,(car b) ,(fold bs2) #f)]
 		    [else
+		     (##sys#check-syntax 'and-let* b '(symbol _))
 		     (let ((var (car b)))
 		       `(##core#let ((,var ,(cadr b)))
 			 (##core#if ,var ,(fold bs2) #f) ) ) ] ) ) ) ) ) ) ) )
@@ -1055,11 +1057,11 @@
     (##sys#check-syntax 'rec form '(_ _ . _))
     (let ((head (cadr form)))
       (if (pair? head)
-	  `(##core#letrec ((,(car head) 
-			    (##core#lambda ,(cdr head)
-					   ,@(cddr form))))
-			  ,(car head))
-	  `(##core#letrec ((,head ,@(cddr form))) ,head))))))
+	  `(##core#letrec* ((,(car head) 
+			     (##core#lambda ,(cdr head)
+					    ,@(cddr form))))
+			   ,(car head))
+	  `(##core#letrec* ((,head ,@(cddr form))) ,head))))))
 
 
 ;;; Definitions available at macroexpansion-time:
@@ -1081,6 +1083,13 @@
   (lambda (x r c)
     (##sys#check-syntax 'use x '(_ . #(_ 0)))
     `(##core#require-extension ,(cdr x) #t))))
+
+(##sys#extend-macro-environment
+ 'use-for-syntax '()
+ (##sys#er-transformer
+  (lambda (x r c)
+    (##sys#check-syntax 'use-for-syntax x '(_ . #(_ 0)))
+    `(,(r 'require-extension-for-syntax) ,@(cdr x)))))
 
 
 ;;; compiler syntax

@@ -105,6 +105,10 @@ if errorlevel 1 (
 echo ======================================== runtime tests ...
 %interpret% -s apply-test.scm
 if errorlevel 1 exit /b 1
+%compile% apply-test.scm
+if errorlevel 1 exit /b 1
+a.out
+if errorlevel 1 exit /b 1
 %compile% test-gc-hooks.scm
 if errorlevel 1 exit /b 1
 a.out
@@ -282,6 +286,11 @@ type r4rstest.log
 echo ======================================== syntax tests (r5rs_pitfalls) ...
 echo (expect two failures)
 %interpret% -i -s r5rs_pitfalls.scm
+if errorlevel 1 exit /b 1
+
+echo "======================================== r7rs tests ..."
+echo (expect two failures)
+%interpret% -i -s r7rs-tests.scm
 if errorlevel 1 exit /b 1
 
 echo ======================================== module tests ...
