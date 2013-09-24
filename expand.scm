@@ -277,7 +277,7 @@
 			      (let ([bs (cadr body)])
 				(values
 				 `(##core#app
-				   (##core#letrec
+				   (##core#letrec*
 				    ([,bindings 
 				      (##core#loop-lambda
 				       ,(map (lambda (b) (car b)) bs) ,@(cddr body))])
@@ -1050,6 +1050,15 @@
     `(##core#let ,@(cdr x)))))
 
 (##sys#extend-macro-environment
+ 'letrec*
+ '()
+ (##sys#er-transformer
+  (lambda (x r c)
+    (##sys#check-syntax 'letrec* x '(_ #((symbol _) 0) . #(_ 1)))
+    (check-for-multiple-bindings (cadr x) x "letrec*")
+    `(##core#letrec* ,@(cdr x)))))
+
+(##sys#extend-macro-environment
  'letrec
  '()
  (##sys#er-transformer
@@ -1144,13 +1153,14 @@
 		     '(##core#begin))
 		    ((null? (cdr clause)) 
 		     `(,%or ,(car clause) ,(expand rclauses #f)))
-		    ((c %=> (cadr clause))
+		    ((and (fx= (length clause) 3)
+			  (c %=> (cadr clause)))
 		     (let ((tmp (r 'tmp)))
 		       `(##core#let ((,tmp ,(car clause)))
 				    (##core#if ,tmp
 					       (,(caddr clause) ,tmp)
 					       ,(expand rclauses #f) ) ) ) )
-		    ((and (list? clause) (fx= (length clause) 4)
+		    ((and (fx= (length clause) 4)
 			  (c %=> (caddr clause)))
 		     (let ((tmp (r 'tmp)))
 		       `(##sys#call-with-values
@@ -1174,6 +1184,7 @@
 	  (body (cddr form)) )
       (let ((tmp (r 'tmp))
 	    (%or (r 'or))
+	    (%=> (r '=>))
 	    (%eqv? (r 'eqv?))
 	    (%else (r 'else)))
 	`(let ((,tmp ,exp))
@@ -1185,7 +1196,10 @@
 		    (##sys#check-syntax 'case clause '#(_ 1))
 		    (cond ((c %else (car clause))
 			   (expand rclauses #t)
-			   `(##core#begin ,@(cdr clause)) )
+			   (if (and (fx= (length clause) 3) ; (else => expr)
+				    (c %=> (cadr clause)))
+			       `(,(caddr clause) ,tmp)
+			       `(##core#begin ,@(cdr clause))))
 			  (else?
 			   (##sys#notice
 			    "non-`else' clause following `else' clause in `case'"
@@ -1196,7 +1210,10 @@
 			   `(##core#if (,%or ,@(##sys#map
 						(lambda (x) `(,%eqv? ,tmp ',x))
 						(car clause)))
-				       (##core#begin ,@(cdr clause)) 
+				       ,(if (and (fx= (length clause) 3) ; ((...) => expr)
+						 (c %=> (cadr clause)))
+					    `(,(caddr clause) ,tmp)
+					    `(##core#begin ,@(cdr clause)))
 				       ,(expand rclauses #f) ) ) ) ) ) ) ) ) ) ) ) )
 
 (##sys#extend-macro-environment
@@ -1370,6 +1387,13 @@
   (lambda (x r c)
     (let ((ids (cdr x)))
       `(##core#require-extension ,ids #t) ) ) ) )
+
+(##sys#extend-macro-environment
+ 'require-extension-for-syntax
+ '()
+ (##sys#er-transformer
+  (lambda (x r c)
+    `(,(r 'begin-for-syntax) (,(r 'require-extension) ,@(cdr x))))))
 
 (##sys#extend-macro-environment
  'module

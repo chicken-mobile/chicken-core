@@ -34,6 +34,7 @@
 	current-print-length setter-tag read-marks
 	##sys#print-exit
 	##sys#format-here-doc-warning
+	exit-in-progress
         maximal-string-length)
   (not inline ##sys#user-read-hook ##sys#error-hook ##sys#signal-hook ##sys#schedule
        ##sys#default-read-info-hook ##sys#infix-list-hook ##sys#sharp-number-hook
@@ -901,6 +902,7 @@ EOF
 (define real? number?)
 (define (rational? n) (##core#inline "C_i_rationalp" n))
 (define ##sys#flonum-fraction (##core#primitive "C_flonum_fraction"))
+(define ##sys#fprat (##core#primitive "C_flonum_rat"))
 (define (##sys#integer? x) (##core#inline "C_i_integerp" x))
 (define integer? ##sys#integer?)
 (define (##sys#exact? x) (##core#inline "C_i_exactp" x))
@@ -930,15 +932,23 @@ EOF
 
 (define (numerator n)
   (##sys#check-number n 'numerator)
-  (if (##core#inline "C_i_integerp" n)
-      n
-      (##sys#signal-hook #:type-error 'numerator "bad argument type - not a rational number" n) ) )
+  (cond
+   ((##core#inline "C_u_i_exactp" n) n)
+   ((##core#inline "C_i_finitep" n)
+    (receive (num denom) (##sys#fprat n) num))
+   (else
+    (##sys#signal-hook
+     #:type-error 'numerator "bad argument type - not a rational number" n)) ) )
 
 (define (denominator n)
   (##sys#check-number n 'denominator)
-  (if (##core#inline "C_i_integerp" n)
-      1
-      (##sys#signal-hook #:type-error 'numerator "bad argument type - not a rational number" n) ) )
+  (cond
+   ((##core#inline "C_u_i_exactp" n) 1)
+   ((##core#inline "C_i_finitep" n)
+    (receive (num denom) (##sys#fprat n) denom))
+   (else
+    (##sys#signal-hook
+     #:type-error 'denominator "bad argument type - not a rational number" n)) ) )
 
 (define magnitude abs)
 
@@ -1527,6 +1537,8 @@ EOF
 	       (and-let* ([a (assq x names-to-chars)])
 		 (##sys#slot a 1) ) ] ) ) ) ) )
 
+;; TODO: Use the character names here in the next release?  Or just
+;; use the numbers everywhere, for clarity?
 (char-name 'space #\space)
 (char-name 'tab #\tab)
 (char-name 'linefeed #\linefeed)
@@ -1534,8 +1546,10 @@ EOF
 (char-name 'vtab (integer->char 11))
 (char-name 'delete (integer->char 127))
 (char-name 'esc (integer->char 27))
+(char-name 'escape (integer->char 27))
 (char-name 'alarm (integer->char 7))
 (char-name 'nul (integer->char 0))
+(char-name 'null (integer->char 0))
 (char-name 'return #\return)
 (char-name 'page (integer->char 12))
 (char-name 'backspace (integer->char 8))
@@ -1937,6 +1951,8 @@ EOF
 (define (##sys#pathname-resolution name thunk . _)
   (thunk (##sys#expand-home-path name)) )
 
+;; DEPRECATED: implicit $VAR- and ~-expansion will be removed in
+;; future versions.  See ticket #1001
 (define ##sys#expand-home-path
   (lambda (path)
     (let ((len (##sys#size path)))
@@ -2232,6 +2248,8 @@ EOF
 (define setter ##sys#setter)
 
 (define (getter-with-setter get set #!optional info)
+  (##sys#check-closure get 'getter-with-setter)
+  (##sys#check-closure set 'getter-with-setter)
   (let ((getdec (cond (info
 		       (##sys#check-string info 'getter-with-setter)
 		       (##sys#make-lambda-info info))
@@ -2517,6 +2535,29 @@ EOF
 			      (loop (##sys#read-char-0 port) (r-cons-codepoint n lst)) )))
 		       ((#\\ #\' #\" #\|)
 			(loop (##sys#read-char-0 port) (cons c lst)))
+		       ((#\newline #\return #\space #\tab)
+			;; Read "escaped" <intraline ws>* <nl> <intraline ws>*
+			(let eat-ws ((c c) (nl? #f))
+			  (case c
+			    ((#\space #\tab)
+			     (eat-ws (##sys#read-char-0 port) nl?))
+			    ((#\return)
+			     (if nl?
+				 (loop c lst)
+			         (let ((nc (##sys#read-char-0 port)))
+			           (if (eq? nc #\newline) ; collapse \r\n
+				       (eat-ws (##sys#read-char-0 port) #t)
+				       (eat-ws nc #t)))))
+			    ((#\newline)
+			     (if nl?
+				 (loop c lst)
+				 (eat-ws (##sys#read-char-0 port) #t)))
+			    (else
+                             (unless nl?
+                               (##sys#read-warning 
+				port 
+				"escaped whitespace, but no newline - collapsing anyway"))
+                             (loop c lst)))))
 		       (else
 			(cond ((and (char-numeric? c)
 				    (char>=? c #\0)
@@ -2706,9 +2747,11 @@ EOF
 			 (if (and skw (eq? ksp #:suffix))
 			     (k (##sys#reverse-list->string (cdr lst)) #t)
 			     (k (##sys#reverse-list->string lst) pkw)))
+                        ((memq c reserved-characters)
+			  (reserved-character c))
 			(else
 			 (let ((c (##sys#read-char-0 port)))
-			   (case (and sep c)
+			   (case c
 			     ((#\|) 
 			      (let ((part (r-string #\|)))
 				(loop (append (##sys#fast-reverse (##sys#string->list part)) lst)
@@ -2817,13 +2860,8 @@ EOF
 
           ; now have the state to make a decision.
           (set! reserved-characters
-	        (if psp
-	            (if sep
-	                '()
-	                '(#\[ #\] #\{ #\}) )
-	            (if sep
-	                '(#\|)
-	                '(#\[ #\] #\{ #\} #\|))))
+                (append (if (not psp) '(#\[ #\] #\{ #\}) '())
+                        (if (not sep) '(#\|) '())))
 
 	  (r-spaces)
 	  (let* ((c (##sys#peek-char-0 port))
@@ -3527,8 +3565,7 @@ EOF
 	       [output (##sys#slot p 12)] )
 	   (##core#inline "C_substring_copy" str output 0 len position)
 	   (##sys#setislot p 10 (fx+ position len)) ) ) )
-     (lambda (p)			; close
-       (##sys#setislot p 10 (##sys#slot p 11)) )
+     void ; close
      (lambda (p) #f)			; flush-output
      (lambda (p)			; char-ready?
        (fx< (##sys#slot p 10) (##sys#slot p 11)) )
@@ -3546,11 +3583,16 @@ EOF
 	      (end (if limit (fx+ pos limit) size)))
 	 (if (fx>= pos size)
 	     #!eof
-	     (receive (next line)
+	     (receive (next line full-line?)
 		 (##sys#scan-buffer-line
 		  buf (if (fx> end size) size end) pos
 		  (lambda (pos) (values #f pos #f) ) )
-	       (##sys#setislot p 4 (fx+ (##sys#slot p 4) 1)) ; lineno
+	       ;; Update row & column position
+	       (if full-line?
+		   (begin
+		     (##sys#setislot p 4 (fx+ (##sys#slot p 4) 1))
+		     (##sys#setislot p 5 0))
+		   (##sys#setislot p 5 (fx+ (##sys#slot p 5) (##sys#size line))))
 	       (##sys#setislot p 10 next)
 	       line) ) ) )
      (lambda (p)			; read-buffered
@@ -3584,26 +3626,26 @@ EOF
 	  (receive (buf offset limit) (eos-handler pos)
 	    (if buf
 		(loop buf offset offset limit line)
-		(values offset line))))
+		(values offset line #f))))
 	(let ((c (##core#inline "C_subchar" buf pos)))
 	  (cond ((eq? c #\newline)
-		 (values (fx+ pos 1) (copy&append buf offset pos line)))
+		 (values (fx+ pos 1) (copy&append buf offset pos line) #t))
 		((and (eq? c #\return)	; \r\n -> drop \r from string
 		      (fx> limit (fx+ pos 1))
 		      (eq? (##core#inline "C_subchar" buf (fx+ pos 1)) #\newline))
-		 (values (fx+ pos 2) (copy&append buf offset pos line)))
+		 (values (fx+ pos 2) (copy&append buf offset pos line) #t))
 		((and (eq? c #\return)	; Edge case (#568): \r{read}[\n|xyz]
 		      (fx= limit (fx+ pos 1)))
 		 (let ((line (copy&append buf offset pos line)))
 		   (receive (buf offset limit) (eos-handler pos)
 		     (if buf
 			 (if (eq? (##core#inline "C_subchar" buf offset) #\newline)
-			     (values (fx+ offset 1) line)
+			     (values (fx+ offset 1) line #t)
 			     ;; "Restore" \r we didn't copy, loop w/ new string
 			     (loop buf offset offset limit
 				   (##sys#string-append line "\r")))
 			 ;; Restore \r here, too (when we reached EOF)
-			 (values offset (##sys#string-append line "\r"))))))
+			 (values offset (##sys#string-append line "\r") #t)))))
 		(else (loop buf offset (fx+ pos 1) limit line)) ) ) ) ) )
 
 (define (open-input-string string)
@@ -3913,17 +3955,17 @@ EOF
    (lambda ()
      ((##sys#exit-handler) _ex_software)) ) )
 
+(define exit-in-progress #f)
+
 (define exit-handler
   (make-parameter
-   (lambda code
-     (##sys#cleanup-before-exit)
-     (##core#inline
-      "C_exit_runtime"
-      (if (null? code)
-	  0
-	  (let ([code (car code)])
-	    (##sys#check-exact code)
-	    code) ) ) ) ) )
+   (lambda (#!optional (code 0))
+     (##sys#check-exact code)
+     (cond (exit-in-progress
+	    (##sys#warn "\"exit\" called while processing on-exit tasks"))
+	   (else
+	    (##sys#cleanup-before-exit)
+	    (##core#inline "C_exit_runtime" code))))))
 
 (define implicit-exit-handler
   (make-parameter
@@ -3936,19 +3978,25 @@ EOF
 
 (define force-finalizers (make-parameter #t))
 
-(define ##sys#cleanup-before-exit
-  (lambda ()
-    (when (##sys#fudge 37)
-      (##sys#print "\n" #f ##sys#standard-error)
-      (##sys#dump-heap-state))
-    (when (##sys#fudge 13)
-      (##sys#print "[debug] forcing finalizers...\n" #f ##sys#standard-error) )
-    (when (force-finalizers) (##sys#force-finalizers)) ) )
+(define ##sys#cleanup-tasks '())
+
+(define (##sys#cleanup-before-exit)
+  (set! exit-in-progress #t)
+  (when (##sys#fudge 37)		; -:H given?
+    (##sys#print "\n" #f ##sys#standard-error)
+    (##sys#dump-heap-state))
+  (let loop ()
+    (let ((tasks ##sys#cleanup-tasks))
+      (set! ##sys#cleanup-tasks '())
+      (unless (null? tasks)
+	(for-each (lambda (t) (t)) tasks)
+	(loop))))    
+  (when (##sys#fudge 13)		; debug mode
+    (##sys#print "[debug] forcing finalizers...\n" #f ##sys#standard-error) )
+  (when (force-finalizers) (##sys#force-finalizers)) )
 
 (define (on-exit thunk)
-  (set! ##sys#cleanup-before-exit
-    (let ((old ##sys#cleanup-before-exit))
-      (lambda () (old) (thunk)) ) ) )
+  (set! ##sys#cleanup-tasks (cons thunk ##sys#cleanup-tasks)))
 
 
 ;;; Condition handling:
@@ -4225,6 +4273,11 @@ EOF
 (define (##sys#permanent? x) (##core#inline "C_permanentp" x))
 (define (##sys#block-address x) (##core#inline_allocate ("C_block_address" 4) x))
 (define (##sys#locative? x) (##core#inline "C_locativep" x))
+(define (##sys#srfi-4-vector? x)
+  (and (##core#inline "C_blockp" x)
+       (##sys#generic-structure? x)
+       (memq (##sys#slot x 0)
+             '(u8vector u16vector s8vector s16vector u32vector s32vector f32vector f64vector))))
 
 (define (##sys#null-pointer)
   (let ([ptr (##sys#make-pointer)])
@@ -4756,6 +4809,9 @@ EOF
 (define (promise? x)
   (##sys#structure? x 'promise) )
 
+(define (make-promise obj)
+  (if (promise? obj) obj
+      (##sys#make-promise (lambda () obj))))
 
 ;;; Internal string-reader:
 

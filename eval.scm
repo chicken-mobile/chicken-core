@@ -295,10 +295,13 @@
 	       (if x
 		   (lambda v #t)
 		   (lambda v #f) ) ]
-	      [(or (char? x)
+	      ((or (char? x)
 		   (eof-object? x)
-		   (string? x) )
-	       (lambda v x) ]
+		   (string? x)
+		   (blob? x)
+		   (vector? x)
+		   (##sys#srfi-4-vector? x))
+	       (lambda v x) )
 	      [(not (pair? x)) 
 	       (##sys#syntax-error/context "illegal non-atomic object" x)]
 	      [(symbol? (##sys#slot x 0))
@@ -433,7 +436,7 @@
 				       (##sys#setslot v2 i (##core#app (##sys#slot vlist 0) v)) )
 				     (##core#app body (cons v2 v)) ) ) ) ] ) ) ]
 
-			 ((##core#letrec)
+			 ((##core#letrec*)
 			  (let ((bindings (cadr x))
 				(body (cddr x)) )
 			    (compile
@@ -446,6 +449,23 @@
 					    bindings)
 			       (##core#let () ,@body) )
 			     e h tf cntr se)))
+
+			((##core#letrec)
+			 (let* ((bindings (cadr x))
+				(vars (map car bindings))
+				(tmps (map gensym vars))
+				(body (cddr x)) )
+			   (compile
+			    `(##core#let
+			      ,(map (lambda (b)
+				      (list (car b) '(##core#undefined))) 
+				    bindings)
+			      (##core#let ,(map (lambda (t b) (list t (cadr b))) tmps bindings)
+					  ,@(map (lambda (v t)
+						   `(##core#set! ,v ,t))
+						 vars tmps)
+					  (##core#let () ,@body) ) )
+			      e h tf cntr se)))
 
 			 [(##core#lambda)
 			  (##sys#check-syntax 'lambda x '(_ lambda-list . #(_ 1)) #f se)
@@ -807,12 +827,15 @@
 (define (##sys#eval/meta form)
   (let ((oldcm (##sys#current-module))
 	(oldme (##sys#macro-environment))
+	(oldce (##sys#current-environment))
 	(mme (##sys#meta-macro-environment))
+	(cme (##sys#current-meta-environment))
 	(aee (##sys#active-eval-environment)))
     (dynamic-wind
 	(lambda () 
 	  (##sys#current-module #f)
 	  (##sys#macro-environment mme)
+	  (##sys#current-environment cme)
 	  (##sys#active-eval-environment ##sys#current-meta-environment))
 	(lambda ()
 	  ((##sys#compile-to-closure
@@ -823,6 +846,8 @@
 	(lambda ()
 	  (##sys#active-eval-environment aee)
 	  (##sys#current-module oldcm)
+	  (##sys#current-meta-environment (##sys#current-environment))
+	  (##sys#current-environment oldce)
 	  (##sys#meta-macro-environment (##sys#macro-environment))
 	  (##sys#macro-environment oldme)))))
 
@@ -1277,7 +1302,7 @@
 	(if (fixnum? n)
 	    (##sys#intern-symbol
 	     (##sys#string-append "srfi-" (##sys#number->string n)))
-	    (##sys#syntax-error 'require-extension "invalid SRFI number" n)))
+	    (##sys#syntax-error-hook 'require-extension "invalid SRFI number" n)))
       (define (doit id impid)
 	(cond ((or (memq id builtin-features)
 		   (if comp?
@@ -1410,6 +1435,7 @@
        (if (memq (car s)
 		 '(import 
 		    require-extension 
+		    require-extension-for-syntax
 		    require-library 
 		    begin-for-syntax
 		    export 
@@ -1508,6 +1534,9 @@
       (##sys#flush-output ##sys#standard-output) ) ) )
 
 (define ##sys#clear-trace-buffer (foreign-lambda void "C_clear_trace_buffer"))
+(define (##sys#resize-trace-buffer i)
+  (##sys#check-exact i)
+  (##core#inline "C_resize_trace_buffer" i))
 
 (define repl
   (let ((eval eval)

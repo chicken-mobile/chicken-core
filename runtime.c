@@ -31,6 +31,7 @@
 #include <signal.h>
 #include <assert.h>
 #include <limits.h>
+#include <float.h>
 #include <math.h>
 #include <signal.h>
 
@@ -713,9 +714,6 @@ int CHICKEN_initialize(int heap, int stack, int symbols, void *toplevel)
   gc_root_list = NULL;
  
   /* Initialize global variables: */
-  if(C_trace_buffer_size < MIN_TRACE_BUFFER_SIZE)
-    C_trace_buffer_size = MIN_TRACE_BUFFER_SIZE;
-
   if(C_heap_growth <= 0) C_heap_growth = DEFAULT_HEAP_GROWTH;
 
   if(C_heap_shrinkage <= 0) C_heap_shrinkage = DEFAULT_HEAP_SHRINKAGE;
@@ -784,7 +782,7 @@ int CHICKEN_initialize(int heap, int stack, int symbols, void *toplevel)
 static C_PTABLE_ENTRY *create_initial_ptable()
 {
   /* IMPORTANT: hardcoded table size - this must match the number of C_pte calls! */
-  C_PTABLE_ENTRY *pt = (C_PTABLE_ENTRY *)C_malloc(sizeof(C_PTABLE_ENTRY) * 57);
+  C_PTABLE_ENTRY *pt = (C_PTABLE_ENTRY *)C_malloc(sizeof(C_PTABLE_ENTRY) * 58);
   int i = 0;
 
   if(pt == NULL)
@@ -821,6 +819,7 @@ static C_PTABLE_ENTRY *create_initial_ptable()
   C_pte(C_less_or_equal_p);
   C_pte(C_quotient);
   C_pte(C_flonum_fraction);
+  C_pte(C_flonum_rat);
   C_pte(C_expt);
   C_pte(C_number_to_string);
   C_pte(C_make_symbol);
@@ -1929,11 +1928,7 @@ C_word C_fcall C_callback(C_word closure, int argc)
   if(old && C_block_item(callback_continuation_stack_symbol, 0) == C_SCHEME_END_OF_LIST)
     panic(C_text("callback invoked in non-safe context"));
 
-#ifdef HAVE_SIGSETJMP
-  C_memcpy(&prev, &C_restart, sizeof(sigjmp_buf));
-#else
-  C_memcpy(&prev, &C_restart, sizeof(jmp_buf));
-#endif
+  C_memcpy(&prev, &C_restart, sizeof(C_restart));
   callback_returned_flag = 0;       
   chicken_is_running = 1;
 
@@ -1947,11 +1942,7 @@ C_word C_fcall C_callback(C_word closure, int argc)
 
   if(!callback_returned_flag) (C_restart_trampoline)(C_restart_address);
   else {
-#ifdef HAVE_SIGSETJMP
-    C_memcpy(&C_restart, &prev, sizeof(sigjmp_buf));
-#else
-    C_memcpy(&C_restart, &prev, sizeof(jmp_buf));
-#endif
+    C_memcpy(&C_restart, &prev, sizeof(C_restart));
     callback_returned_flag = 0;
   }
  
@@ -2387,6 +2378,13 @@ void C_stack_overflow(void)
 void C_stack_overflow_with_msg(C_char *msg)
 {
   barf(C_STACK_OVERFLOW_ERROR, NULL);
+}
+
+void C_temp_stack_overflow(void)
+{
+  /* Just raise a "too many parameters" error; it isn't very useful to
+     show a different message here. */
+  barf(C_TOO_MANY_PARAMETERS_ERROR, NULL);
 }
 
 
@@ -3304,8 +3302,6 @@ C_regparm void C_fcall C_rereclaim2(C_uword size, int double_plus)
 	  
   if(size > C_maximal_heap_size) size = C_maximal_heap_size;
 
-  if(size == heap_size) return;
-
   if(debug_mode) 
     C_dbg(C_text("debug"), C_text("resizing heap dynamically from " UWORD_COUNT_FORMAT_STRING "k to " UWORD_COUNT_FORMAT_STRING "k ...\n"), 
 	  heap_size / 1024, size / 1024);
@@ -3416,7 +3412,7 @@ C_regparm void C_fcall C_rereclaim2(C_uword size, int double_plus)
   heap_free (heapspace2, heapspace2_size);
   
   if ((heapspace2 = heap_alloc (size, &tospace_start)) == NULL)
-    panic(C_text("out ot memory - cannot allocate heap segment"));
+    panic(C_text("out of memory - cannot allocate next heap segment"));
   heapspace2_size = size;
 
   heapspace1 = new_heapspace;
@@ -3876,6 +3872,9 @@ C_regparm void C_fcall C_clear_trace_buffer(void)
   int i;
 
   if(trace_buffer == NULL) {
+    if(C_trace_buffer_size < MIN_TRACE_BUFFER_SIZE)
+      C_trace_buffer_size = MIN_TRACE_BUFFER_SIZE;
+
     trace_buffer = (TRACE_INFO *)C_malloc(sizeof(TRACE_INFO) * C_trace_buffer_size);
 
     if(trace_buffer == NULL)
@@ -3893,6 +3892,15 @@ C_regparm void C_fcall C_clear_trace_buffer(void)
   }
 }
 
+C_word C_resize_trace_buffer(C_word size) {
+  int old_size = C_trace_buffer_size;
+  assert(trace_buffer);
+  free(trace_buffer);
+  trace_buffer = NULL;
+  C_trace_buffer_size = C_unfix(size);
+  C_clear_trace_buffer();
+  return(C_fix(old_size));
+}
 
 C_word C_fetch_trace(C_word starti, C_word buffer)
 {
@@ -6066,6 +6074,7 @@ void C_ccall C_apply(C_word c, C_word closure, C_word k, C_word fn, ...)
   /* 3 additional args + 1 slot for stack-pointer + two for stack-alignment to 16 bytes */
   buf = alloca((n + 6) * sizeof(C_word));
 # ifdef __x86_64__
+  /* XXX Shouldn't this check for C_SIXTY_FOUR in general? */
   buf = (void *)C_align16((C_uword)buf);
 # endif
   buf[ 0 ] = n + 2;
@@ -7361,6 +7370,51 @@ void C_ccall C_flonum_fraction(C_word c, C_word closure, C_word k, C_word n)
   C_kontinue_flonum(k, modf(fn, &i));
 }
 
+void C_ccall C_flonum_rat(C_word c, C_word closure, C_word k, C_word n)
+{
+  double frac, tmp, numer, denom, factor, fn = C_flonum_magnitude(n);
+  double r1a, r1b;
+  double ga, gb;
+  C_word ab[WORDS_PER_FLONUM * 2], *ap = ab;
+  int i = 0;
+
+  if (n < 1 && n > -1) {
+    factor = pow(2, DBL_MANT_DIG);
+    fn *= factor;
+  } else {
+    factor = 1;
+  }
+
+  /* Calculate bit-length of the fractional part (ie, after decimal point) */
+  frac = fn;
+  while(!C_isnan(frac) && !C_isinf(frac) && C_modf(frac, &tmp) != 0.0) {
+    frac *= 2;
+    if (i++ > 3000) /* should this be flonum-maximum-exponent? */
+      barf(C_CANT_REPRESENT_INEXACT_ERROR, "fprat", n);
+  }
+
+  /* r1a and r1b are integral and form the rational number r1 = r1a/r1b. */
+  r1b = pow(2, i);
+  r1a = fn*r1b;
+
+  /*
+   * We "multiply" r1 with r2 given that r2 = 1/factor.
+   * result = (r1a * (factor / g)) / abs(r1b / g)   | g = gcd(r1b, factor)
+   */
+  ga = r1b;
+  gb = factor;
+  while(gb != 0.0) {
+    tmp = fmod(ga, gb);
+    ga = gb;
+    gb = tmp;
+  }
+  /* ga now holds gcd(r1b, factor), and r1b and ga are absolute already */
+  numer = r1a * (factor / ga);
+  denom = r1b / ga;
+
+  C_values(4, C_SCHEME_UNDEFINED, k, C_flonum(&ap, numer), C_flonum(&ap, denom));
+}
+
 
 C_regparm C_word C_fcall 
 C_a_i_exact_to_inexact(C_word **a, int c, C_word n)
@@ -7793,6 +7847,11 @@ void C_ccall C_number_to_string(C_word c, C_word closure, C_word k, C_word num, 
       }
       else if(buffer[ 1 ] != 'i') C_strcat(buffer, C_text(".0")); /* negative infinity? */
     }
+#ifdef __MINGW32__
+    /* On mingw32, gcvt(3) does not add a trailing zero */
+    else if(buffer[ C_strlen(buffer) - 1 ] == '.')
+      C_strcat(buffer, C_text("0"));
+#endif
 
     p = buffer;
   }

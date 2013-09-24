@@ -1,6 +1,6 @@
 ;;;; library-tests.scm
 
-(use srfi-1 extras)
+(use srfi-1 extras ports)
 
 (define-syntax assert-fail
   (syntax-rules ()
@@ -73,6 +73,26 @@
 (assert (= 1 (*)))
 
 (assert (= 2.5 (/ 5 2)))
+
+;; Use equal? instead of = to check equality and exactness in one go
+(assert (equal? 0 (numerator 0)))
+(assert (equal? 1 (denominator 0)))
+(assert (equal? 3 (numerator 3)))
+(assert (equal? 1 (denominator 3)))
+(assert (equal? -3 (numerator -3)))
+(assert (equal? 1 (denominator -3)))
+(assert (equal? 1.0 (numerator 0.5)))
+(assert (equal? 2.0 (denominator 0.5)))
+(assert (equal? 5.0 (numerator 1.25)))
+(assert (equal? 4.0 (denominator 1.25)))
+(assert (equal? -5.0 (numerator -1.25)))
+(assert (equal? 4.0 (denominator -1.25)))
+(assert (equal? 1e10 (numerator 1e10)))
+(assert (equal? 1.0 (denominator 1e10)))
+(assert-fail (numerator +inf.0))
+(assert-fail (numerator +nan.0))
+(assert-fail (denominator +inf.0))
+(assert-fail (denominator +nan.0))
 
 (assert (even? 2))
 (assert (even? 2.0))
@@ -207,28 +227,31 @@
 
 ;; fp-math
 
-(assert (= (sin 42.0) (fpsin 42.0)))
-(assert (= (cos 42.0) (fpcos 42.0)))
-(assert (= (tan 42.0) (fptan 42.0)))
-(assert (= (asin 0.5) (fpasin 0.5)))
-(assert (= (acos 0.5) (fpacos 0.5)))
-(assert (= (atan 0.5) (fpatan 0.5)))
-(assert (= (atan 42.0 1.2) (fpatan2 42.0 1.2)))
-(assert (= (atan 42.0 1) (fpatan2 42.0 1.0)))
-(assert (= (atan 42 1.0) (fpatan2 42.0 1.0)))
-(assert (= (exp 42.0) (fpexp 42.0)))
-(assert (= (log 42.0) (fplog 42.0)))
-(assert (= (expt 42.0 3.5) (fpexpt 42.0 3.5)))
-(assert (= (sqrt 42.0) (fpsqrt 42.0)))
-(assert (= 43.0 (fpround 42.5)))
-(assert (= -43.0 (fpround -42.5)))
-(assert (= 42.0 (fpround 42.2)))
-(assert (= 42.0 (fptruncate 42.5)))
-(assert (= -42.0 (fptruncate -42.5)))
-(assert (= 42.0 (fpfloor 42.2)))
-(assert (= -43.0 (fpfloor -42.5)))
-(assert (= 43.0 (fpceiling 42.5)))
-(assert (= -42.0 (fpceiling -42.2)))
+(define (inexact= a b)
+  (< (abs (- 1 (abs (/ a b)))) 1e-10))
+
+(assert (inexact= (sin 42.0) (fpsin 42.0)))
+(assert (inexact= (cos 42.0) (fpcos 42.0)))
+(assert (inexact= (tan 42.0) (fptan 42.0)))
+(assert (inexact= (asin 0.5) (fpasin 0.5)))
+(assert (inexact= (acos 0.5) (fpacos 0.5)))
+(assert (inexact= (atan 0.5) (fpatan 0.5)))
+(assert (inexact= (atan 42.0 1.2) (fpatan2 42.0 1.2)))
+(assert (inexact= (atan 42.0 1) (fpatan2 42.0 1.0)))
+(assert (inexact= (atan 42 1.0) (fpatan2 42.0 1.0)))
+(assert (inexact= (exp 42.0) (fpexp 42.0)))
+(assert (inexact= (log 42.0) (fplog 42.0)))
+(assert (inexact= (expt 42.0 3.5) (fpexpt 42.0 3.5)))
+(assert (inexact= (sqrt 42.0) (fpsqrt 42.0)))
+(assert (inexact= 43.0 (fpround 42.5)))
+(assert (inexact= -43.0 (fpround -42.5)))
+(assert (inexact= 42.0 (fpround 42.2)))
+(assert (inexact= 42.0 (fptruncate 42.5)))
+(assert (inexact= -42.0 (fptruncate -42.5)))
+(assert (inexact= 42.0 (fpfloor 42.2)))
+(assert (inexact= -43.0 (fpfloor -42.5)))
+(assert (inexact= 43.0 (fpceiling 42.5)))
+(assert (inexact= -42.0 (fpceiling -42.2)))
 (assert (not (fpinteger? 2.3)))
 (assert (fpinteger? 1.0))
 
@@ -260,6 +283,29 @@
   (assert (string=? "aBc" (symbol->string (with-input-from-string "|aBc|" read))))
   (assert (string=? "aBc" (symbol->string (with-input-from-string "a\\Bc" read)))))
 
+(parameterize ((symbol-escape #f))
+  (assert (string=? "aBc" (symbol->string (with-input-from-string "aBc" read))))
+  (assert-fail (with-input-from-string "|aBc|" read))
+  (assert-fail (with-input-from-string "a|Bc" read)))
+(parameterize ((symbol-escape #t))
+  (assert (string=? "aBc" (symbol->string (with-input-from-string "aBc" read))))
+  (assert (string=? "aBc" (symbol->string (with-input-from-string "|aBc|" read))))
+  (assert (string=? "aB c" (symbol->string (with-input-from-string "|aB c|" read))))
+  ;; The following is an extension/generalisation of r7RS
+  (assert (string=? "aBc" (symbol->string (with-input-from-string "a|Bc|" read))))
+  ;; "Unterminated string" (unterminated identifier?)
+  (assert-fail (with-input-from-string "a|Bc" read)))
+
+;;; Paren synonyms
+
+(parameterize ((parentheses-synonyms #f))
+  (assert (eq? '() (with-input-from-string "()" read)))
+  (assert-fail (with-input-from-string "[]" read))
+  (assert-fail (with-input-from-string "{}" read)))
+(parameterize ((parentheses-synonyms #t))
+  (assert (eq? '() (with-input-from-string "()" read)))
+  (assert (eq? '() (with-input-from-string "[]" read)))
+  (assert (eq? '() (with-input-from-string "{}" read))))
 
 ;;; keywords
 
@@ -326,6 +372,12 @@
 (assert (equal? '#${ab c} '#${ab0c}))
 (assert (equal? '#${abc} '#${ab0c}))
 (assert (equal? '#${a b c} '#${0a0b0c}))
+
+;; self-evaluating
+(assert (equal? '#${a} #${a}))
+(assert (equal? '#${abcd} #${abcd}))
+(assert (equal? '#${abc} #${abc}))
+
 
 ;; #808: blobs and strings with embedded nul bytes should not be compared
 ;; with ASCIIZ string comparison functions

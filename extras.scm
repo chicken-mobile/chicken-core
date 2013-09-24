@@ -27,7 +27,7 @@
 
 (declare
  (unit extras)
- (uses data-structures ports))
+ (uses data-structures))
 
 (declare
   (hide fprintf0 generic-write) )
@@ -176,10 +176,10 @@
 (define (read-string! n dest #!optional (port ##sys#standard-input) (start 0))
   (##sys#check-input-port port #t 'read-string!)
   (##sys#check-string dest 'read-string!)
-  (when n
-    (##sys#check-exact n 'read-string!)
-    (when (fx> (fx+ start n) (##sys#size dest))
-      (set! n (fx- (##sys#size dest) start))))
+  (when n (##sys#check-exact n 'read-string!))
+  (let ((dest-size (##sys#size dest)))
+    (unless (and n (fx<= (fx+ start n) dest-size))
+      (set! n (fx- dest-size start))))
   (##sys#check-exact start 'read-string!)
   (##sys#read-string! n dest port start) )
 
@@ -557,7 +557,7 @@
 
       (define (style head)
 	(case head
-	  ((lambda let* letrec define) pp-lambda)
+	  ((lambda let* letrec letrec* define) pp-lambda)
 	  ((if set!)                   pp-if)
 	  ((cond)                      pp-cond)
 	  ((case)                      pp-case)

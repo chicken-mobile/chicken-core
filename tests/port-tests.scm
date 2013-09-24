@@ -1,5 +1,8 @@
 (require-extension srfi-1 ports utils srfi-4 extras tcp posix)
 
+(include "test.scm")
+(test-begin)
+
 (define-syntax assert-error
   (syntax-rules ()
     ((_ expr) 
@@ -39,6 +42,17 @@ EOF
   (read-line p)))
 (assert (= 20 (length (read-lines (open-input-string *text*)))))
 
+(let ((out (open-output-string)))
+  (test-equal "Initially, output string is empty"
+              (get-output-string out) "")
+  (display "foo" out)
+  (test-equal "output can be extracted from output string"
+              (get-output-string out) "foo")
+  (close-output-port out)
+  (test-equal "closing a string output port has no effect on the returned data"
+              (get-output-string out) "foo")
+  (test-error "writing to a closed string output port is an error"
+              (display "bar" out)))
 
 ;;; copy-port
 
@@ -224,3 +238,123 @@ EOF
 
 (print "\nEmbedded NUL bytes in filenames are rejected\n")
 (assert-error (with-output-to-file "embedded\x00null-byte" void))
+
+;;; #978 -- port-position checks for read-line
+
+(define (read-line/pos p limit)  ;; common
+  (let ((s (read-line p limit)))
+    (let-values (((row col) (port-position p)))
+      (list s row col))))
+
+(define (read-string-line/pos str limit)
+  (read-line/pos (open-input-string str) limit))
+
+(define (read-process-line/pos cmd args limit)
+  (let-values (((i o pid) (process cmd args)))
+    (let ((rc (read-line/pos i limit)))
+      (close-input-port i)
+      (close-output-port o)
+      rc)))
+(define (read-echo-line/pos str limit)
+  (read-process-line/pos "echo" (list "-n" str) limit))
+
+(use srfi-18)
+(define (read-tcp-line/pos str limit)
+  (let ((pn 8079))
+    (thread-start! (lambda ()
+		     (let ((L (tcp-listen pn)))
+		       (let-values (((i o) (tcp-accept L)))
+			 (display str o)
+			 (close-input-port i)
+			 (close-output-port o)
+			 (tcp-close L)))))
+    (let-values (((i o)
+		  (let lp ((n 10))
+		    (if (zero? n)
+			(error "timeout connecting to server")
+			(condition-case (tcp-connect "localhost" pn)
+					((exn i/o net) (thread-sleep! 0.1) (lp (- n 1))))))))
+      (let ((rc (read-line/pos i limit)))
+	(close-input-port i)
+	(close-output-port o)
+	rc))))
+
+(define (test-port-position proc)
+  (test-equal "advance row when encountering delim" 
+	      (proc "abcde\nfghi" 6)
+	      '("abcde" 2 0))
+  (test-equal "reaching limit sets col to limit, and does not advance row"
+	      (proc "abcdefghi" 6)
+	      '("abcdef" 1 6))
+  (test-equal "delimiter counted in limit" ;; observed behavior, strange
+	      (proc "abcdef\nghi" 6)
+	      '("abcdef" 1 6))
+  (test-equal "EOF reached"
+	      (proc "abcde" 6)
+	      '("abcde" 1 5)))
+
+(test-group
+ "read-line string port position tests"
+ (test-port-position read-string-line/pos))
+
+(test-group "read-string!"
+  (let ((in (open-input-string "1234567890"))
+        (buf (make-string 5)))
+    (test-equal "read-string! won't read past buffer if given #f"
+                (read-string! #f buf in)
+                5)
+    (test-equal "read-string! reads the requested bytes with #f"
+                buf
+                "12345")
+    (test-equal "read-string! won't read past buffer if given #f and offset"
+                (read-string! #f buf in 3)
+                2)
+    (test-equal "read-string! reads the requested bytes with #f and offset"
+                buf
+                "12367")
+    (test-equal "read-string! reads until the end correctly"
+                (read-string! #f buf in)
+                3)
+    (test-equal "read-string! leaves the buffer's tail intact"
+                buf
+                "89067"))
+  (let ((in (open-input-string "1234567890"))
+        (buf (make-string 5)))
+    (test-equal "read-string! won't read past buffer if given size"
+                (read-string! 10 buf in)
+                5)
+    (test-equal "read-string! reads the requested bytes with buffer size"
+                buf
+                "12345")
+    (test-equal "read-string! won't read past buffer if given size and offset"
+                (read-string! 10 buf in 3)
+                2)
+    (test-equal "read-string! reads the requested bytes with buffer size and offset"
+                buf
+                "12367")
+    (test-equal "read-string! reads until the end correctly with buffer size"
+                (read-string! 10 buf in)
+                3)
+    (test-equal "read-string! leaves the buffer's tail intact"
+                buf
+                "89067")))
+
+;; Disabled because it requires `echo -n` for
+;; the EOF test, and that is not available on all systems.
+;; Uncomment locally to run.
+#;
+(test-group
+ "read-line process port position tests"
+ (test-port-position read-echo-line/pos))
+
+;; Disabled because currently fragile if port is already taken by
+;; another service.
+;; Uncomment locally to run.
+#;
+(test-group
+ "read-line TCP port position tests"
+ (test-port-position read-tcp-line/pos))
+
+;;;
+
+(test-end)
