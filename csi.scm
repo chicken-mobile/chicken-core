@@ -668,7 +668,9 @@ EOF
 	    [(##sys#locative? x)
 	     (fprintf out "locative~%  pointer ~X~%  index ~A~%  type ~A~%"
 		      (##sys#peek-unsigned-integer x 0)
-		      (##sys#slot x 1)
+		      (if (##sys#slot x 4)
+			  "<empty>"
+			  (##sys#slot x 1))
 		      (case (##sys#slot x 2) 
 			[(0) "slot"]
 			[(1) "char"]

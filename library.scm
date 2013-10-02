@@ -4221,6 +4221,7 @@ EOF
 	((45) (apply ##sys#signal-hook #:arithmetic-error loc "floating-point exception" args))
 	((46) (apply ##sys#signal-hook #:runtime-error loc "illegal instruction" args))
 	((47) (apply ##sys#signal-hook #:memory-error loc "bus error" args))
+	((48) (apply ##sys#signal-hook #:type-error loc "reference to locative of empty object" args))
 	(else (apply ##sys#signal-hook #:runtime-error loc "unknown internal error" args)) ) ) ) )
 
 
@@ -4866,66 +4867,72 @@ EOF
 
 
 ;;; We need this here so `location' works:
+;
+; - pass #f as index to create a locative that is not referencable (sic)
  
 (define (##sys#make-locative obj index weak? loc)
-  (cond [(##sys#immediate? obj)
-	 (##sys#signal-hook #:type-error loc "locative cannot refer to immediate object" obj) ]
-	[(or (vector? obj) (pair? obj))
-	 (##sys#check-range index 0 (##sys#size obj) loc)
-	 (##core#inline_allocate ("C_a_i_make_locative" 5) 0 obj index weak?) ]
-	#;[(symbol? obj)
-	 (##sys#check-range index 0 1 loc)
-	 (##core#inline_allocate ("C_a_i_make_locative" 5) 0 obj index weak?) ]
-	[(and (##core#inline "C_blockp" obj)
-	      (##core#inline "C_bytevectorp" obj) )
-	 (##sys#check-range index 0 (##sys#size obj) loc)
-	 (##core#inline_allocate ("C_a_i_make_locative" 5) 2 obj index weak?) ]
-	[(##sys#generic-structure? obj)
-	 (case (##sys#slot obj 0)
-	   [(u8vector)
-	    (let ([v (##sys#slot obj 1)])
-	      (##sys#check-range index 0 (##sys#size v) loc)
-	      (##core#inline_allocate ("C_a_i_make_locative" 5) 2 v index weak?))  ]
-	   [(s8vector)
-	    (let ([v (##sys#slot obj 1)])
-	      (##sys#check-range index 0 (##sys#size v) loc)
-	      (##core#inline_allocate ("C_a_i_make_locative" 5) 3 v index weak?) ) ]
-	   [(u16vector)
-	    (let ([v (##sys#slot obj 1)])
-	      (##sys#check-range index 0 (##sys#size v) loc)
-	      (##core#inline_allocate ("C_a_i_make_locative" 5) 4 v index weak?) ) ]
-	   [(s16vector)
-	    (let ([v (##sys#slot obj 1)])
-	      (##sys#check-range index 0 (##sys#size v) loc)
-	      (##core#inline_allocate ("C_a_i_make_locative" 5) 5 v index weak?) ) ]
-	   [(u32vector)
-	    (let ([v (##sys#slot obj 1)])
-	      (##sys#check-range index 0 (##sys#size v) loc)
-	      (##core#inline_allocate ("C_a_i_make_locative" 5) 6 v index weak?) ) ]
-	   [(s32vector)
-	    (let ([v (##sys#slot obj 1)])
-	      (##sys#check-range index 0 (##sys#size v) loc)
-	      (##core#inline_allocate ("C_a_i_make_locative" 5) 7 v index weak?) ) ]
-	   [(f32vector)
-	    (let ([v (##sys#slot obj 1)])
-	      (##sys#check-range index 0 (##sys#size v) loc)
-	      (##core#inline_allocate ("C_a_i_make_locative" 5) 8 v index weak?) ) ]
-	   [(f64vector)
-	    (let ([v (##sys#slot obj 1)])
-	      (##sys#check-range index 0 (##sys#size v) loc)
-	      (##core#inline_allocate ("C_a_i_make_locative" 5) 9 v index weak?) ) ]
-	   ;;XXX pointer-vector currently not supported
-	   [else 
-	    (##sys#check-range index 0 (fx- (##sys#size obj) 1) loc)
-	    (##core#inline_allocate ("C_a_i_make_locative" 5) 0 obj (fx+ index 1) weak?) ] ) ]
-	[(string? obj)
-	 (##sys#check-range index 0 (##sys#size obj) loc)
-	 (##core#inline_allocate ("C_a_i_make_locative" 5) 1 obj index weak?) ] 
-	[else
-	 (##sys#signal-hook
-	  #:type-error loc
-	  "bad argument type - locative cannot refer to objects of this type" 
-	  obj) ] ) )
+  (let-syntax ((check 
+		(syntax-rules ()
+		  ((_ val)
+		   (when index (##sys#check-range index 0 (##sys#size val) loc))))))
+    (cond ((##sys#immediate? obj)
+	   (##sys#signal-hook #:type-error loc "locative cannot refer to immediate object" obj) )
+	  ((or (vector? obj) (pair? obj))
+	   (check obj)
+	   (##core#inline_allocate ("C_a_i_make_locative" 5) 0 obj index weak?) )
+	  #;((symbol? obj)
+	  (check obj)
+	  (##core#inline_allocate ("C_a_i_make_locative" 5) 0 obj index weak?) )
+	  ((and (##core#inline "C_blockp" obj)
+		(##core#inline "C_bytevectorp" obj) )
+	   (check obj)
+	   (##core#inline_allocate ("C_a_i_make_locative" 5) 2 obj index weak?) )
+	  ((##sys#generic-structure? obj)
+	   (case (##sys#slot obj 0)
+	     ((u8vector)
+	      (let ((v (##sys#slot obj 1)))
+		(check v)
+		(##core#inline_allocate ("C_a_i_make_locative" 5) 2 v index weak?))  )
+	     ((s8vector)
+	      (let ((v (##sys#slot obj 1)))
+		(check v)
+		(##core#inline_allocate ("C_a_i_make_locative" 5) 3 v index weak?) ) )
+	     ((u16vector)
+	      (let ((v (##sys#slot obj 1)))
+		(check v)
+		(##core#inline_allocate ("C_a_i_make_locative" 5) 4 v index weak?) ) )
+	     ((s16vector)
+	      (let ((v (##sys#slot obj 1)))
+		(check v)
+		(##core#inline_allocate ("C_a_i_make_locative" 5) 5 v index weak?) ) )
+	     ((u32vector)
+	      (let ((v (##sys#slot obj 1)))
+		(check v)
+		(##core#inline_allocate ("C_a_i_make_locative" 5) 6 v index weak?) ) )
+	     ((s32vector)
+	      (let ((v (##sys#slot obj 1)))
+		(check v)
+		(##core#inline_allocate ("C_a_i_make_locative" 5) 7 v index weak?) ) )
+	     ((f32vector)
+	      (let ((v (##sys#slot obj 1)))
+		(check v)
+		(##core#inline_allocate ("C_a_i_make_locative" 5) 8 v index weak?) ) )
+	     ((f64vector)
+	      (let ((v (##sys#slot obj 1)))
+		(check v)
+		(##core#inline_allocate ("C_a_i_make_locative" 5) 9 v index weak?) ) )
+	     ;;XXX pointer-vector currently not supported
+	     (else 
+	      (check v)
+	      (##core#inline_allocate ("C_a_i_make_locative" 5) 0 obj (fx+ index 1) weak?) ) ) )
+	  ((string? obj)
+	   (check obj)
+	   (##core#inline_allocate ("C_a_i_make_locative" 5) 1 obj index weak?) ) 
+	  (else
+	   (##sys#signal-hook
+	    #:type-error loc
+	    "bad argument type - locative cannot refer to objects of this type" 
+	    obj) ) ) ) )
 
 
 ;;; More memory info
