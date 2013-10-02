@@ -292,11 +292,11 @@ EOF
 ;	9	f64vector		(C_F64_LOCATIVE)
 ; 3	Object or #f, if weak (C_word)
 
-(define (make-locative obj . index)
-  (##sys#make-locative obj (optional index 0) #f 'make-locative) )
+(define (make-locative obj #!optional index)
+  (##sys#make-locative obj index #f 'make-locative) )
 
-(define (make-weak-locative obj . index)
-  (##sys#make-locative obj (optional index 0) #t 'make-weak-locative) )
+(define (make-weak-locative obj #!optional index)
+  (##sys#make-locative obj index #t 'make-weak-locative) )
 
 (define (locative-set! x y) (##core#inline "C_i_locative_set" x y))
 

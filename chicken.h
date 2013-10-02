@@ -475,7 +475,7 @@ static inline int isinf_ld (long double x)
 #define C_SIZEOF_SWIG_POINTER     3
 #define C_SIZEOF_VECTOR(n)        ((n) + 1)
 #define C_SIZEOF_BUCKET           3
-#define C_SIZEOF_LOCATIVE         5
+#define C_SIZEOF_LOCATIVE         6
 #define C_SIZEOF_PORT             16
 
 /* Fixed size types have pre-computed header tags */
@@ -625,6 +625,7 @@ static inline int isinf_ld (long double x)
 #define C_FLOATING_POINT_EXCEPTION_ERROR              45
 #define C_ILLEGAL_INSTRUCTION_ERROR                   46
 #define C_BUS_ERROR                                   47
+#define C_EMPTY_LOCATIVE_ERROR                        48
 
 
 /* Platform information */
