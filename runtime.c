@@ -1780,6 +1780,11 @@ void barf(int code, char *loc, ...)
     c = 0;
     break;
 
+  case C_EMPTY_LOCATIVE_ERROR:
+    msg = C_text("reference to locative of empty object");
+    c = 1;
+    break;
+
   default: panic(C_text("illegal internal error code"));
   }
   
@@ -8579,10 +8584,12 @@ C_a_i_cpu_time(C_word **a, int c, C_word buf)
 C_regparm C_word C_fcall C_a_i_make_locative(C_word **a, int c, C_word type, C_word object, C_word index, C_word weak)
 {
   C_word *loc = *a;
-  int offset, i, in = C_unfix(index);
-  *a = loc + C_SIZEOF_LOCATIVE;
+  int offset, i, in = 0;
 
+  *a = loc + C_SIZEOF_LOCATIVE;
   loc[ 0 ] = C_LOCATIVE_TAG;
+
+  if(index != C_SCHEME_FALSE) in = C_unfix(index);
 
   switch(C_unfix(type)) {
   case C_SLOT_LOCATIVE: in *= sizeof(C_word); break;
@@ -8599,6 +8606,7 @@ C_regparm C_word C_fcall C_a_i_make_locative(C_word **a, int c, C_word type, C_w
   loc[ 2 ] = C_fix(offset);
   loc[ 3 ] = type;
   loc[ 4 ] = C_truep(weak) ? C_SCHEME_FALSE : object;
+  loc[ 5 ] = C_mk_bool(C_header_size(object) == 0);	/* this is is an "empty" locative, where references are disallowed */
 
   for(i = 0; i < locative_table_count; ++i)
     if(locative_table[ i ] == C_SCHEME_UNDEFINED) {
@@ -8638,6 +8646,9 @@ void C_ccall C_locative_ref(C_word c, C_word closure, C_word k, C_word loc)
 
   if(ptr == NULL) barf(C_LOST_LOCATIVE_ERROR, "locative-ref", loc);
 
+  if(C_truep(C_block_item(loc, 4)))
+    barf(C_EMPTY_LOCATIVE_ERROR, "locative-ref", loc);
+
   switch(C_unfix(C_block_item(loc, 2))) {
   case C_SLOT_LOCATIVE: C_kontinue(k, *ptr);
   case C_CHAR_LOCATIVE: C_kontinue(k, C_make_character(*((char *)ptr)));
@@ -8665,6 +8676,9 @@ C_regparm C_word C_fcall C_i_locative_set(C_word loc, C_word x)
 
   if(ptr == NULL)
     barf(C_LOST_LOCATIVE_ERROR, "locative-set!", loc);
+
+  if(C_truep(C_block_item(loc, 4)))
+    barf(C_EMPTY_LOCATIVE_ERROR, "locative-set!", loc);
 
   switch(C_unfix(C_block_item(loc, 2))) {
   case C_SLOT_LOCATIVE: C_mutate2(ptr, x); break;

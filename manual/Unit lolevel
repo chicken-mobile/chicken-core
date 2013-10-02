@@ -360,6 +360,11 @@ Creates a locative that refers to the element of the non-immediate object
 SRFI-4 number-vector, or record structure. {{INDEX}} should be a fixnum.
 {{INDEX}} defaults to 0.
 
+If {{INDEX}} is not given or {{#f}}, then {{OBJ}} may be an empty
+aggregate object of size 0. It is still a valid locative but invoking
+{{locative-ref}} or {{locative-set!}} on such a locative will signal a
+runtime error.
+
 
 ==== make-weak-locative
 
