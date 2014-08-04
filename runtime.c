@@ -640,10 +640,6 @@ int CHICKEN_initialize(int heap, int stack, int symbols, void *toplevel)
   if(chicken_is_initialized) return 1;
   else chicken_is_initialized = 1;
 
-#ifdef __ANDROID__
-  debug_mode = 2;
-#endif
-
   if(debug_mode) 
     C_dbg(C_text("debug"), C_text("application startup...\n"));
 
