@@ -1,6 +1,6 @@
 ;;; data-structures.scm - Optional data structures extensions
 ;
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; All rights reserved.
 ;
 ; Redistribution and use in source and binary forms, with or without
@@ -307,15 +307,24 @@
   (define (traverse which where start test loc)
     (##sys#check-string which loc)
     (##sys#check-string where loc)
-    (let ([wherelen (##sys#size where)]
-	  [whichlen (##sys#size which)] )
+    (let* ((wherelen (##sys#size where))
+	   (whichlen (##sys#size which))
+	   (end (fx- wherelen whichlen)))
       (##sys#check-exact start loc)
-      (let loop ([istart start] [iend whichlen])
-	(cond [(fx> iend wherelen) #f]
-	      [(test istart whichlen) istart]
-	      [else 
-	       (loop (fx+ istart 1)
-		     (fx+ iend 1) ) ] ) ) ) )
+      (if (and (fx>= start 0)
+	       (fx>= wherelen start))
+	  (if (fx= whichlen 0)
+	      start
+	      (and (fx>= end 0)
+		   (let loop ((istart start))
+		     (cond ((fx> istart end) #f)
+			   ((test istart whichlen) istart)
+			   (else (loop (fx+ istart 1)))))))
+	  (##sys#error-hook (foreign-value "C_OUT_OF_RANGE_ERROR" int)
+			    loc
+			    start
+			    wherelen))))
+
   (set! ##sys#substring-index 
     (lambda (which where start)
       (traverse 
@@ -508,7 +517,7 @@
 (define (string-translate* str smap)
   (##sys#check-string str 'string-translate*)
   (##sys#check-list smap 'string-translate*)
-  (let ([len (##sys#size str)])
+  (let ((len (##sys#size str)))
     (define (collect i from total fs)
       (if (fx>= i len)
 	  (##sys#fragments->string
@@ -517,15 +526,16 @@
 	    (if (fx> i from) 
 		(cons (##sys#substring str from i) fs)
 		fs) ) )
-	  (let loop ([smap smap])
+	  (let loop ((smap smap))
 	    (if (null? smap) 
 		(collect (fx+ i 1) from (fx+ total 1) fs)
-		(let* ([p (car smap)]
-		       [sm (car p)]
-		       [smlen (string-length sm)]
-		       [st (cdr p)] )
-		  (if (##core#inline "C_substring_compare" str sm i 0 smlen)
-		      (let ([i2 (fx+ i smlen)])
+		(let* ((p (car smap))
+		       (sm (car p))
+		       (smlen (string-length sm))
+		       (st (cdr p)) )
+		  (if (and (fx<= (fx+ i smlen) len)
+			   (##core#inline "C_substring_compare" str sm i 0 smlen))
+		      (let ((i2 (fx+ i smlen)))
 			(when (fx> i from)
 			  (set! fs (cons (##sys#substring str from i) fs)) )
 			(collect 

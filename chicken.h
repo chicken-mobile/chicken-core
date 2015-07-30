@@ -1,7 +1,7 @@
 
 /* chicken.h - General headerfile for compiler generated executables
 ;
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; Copyright (c) 2000-2007, Felix L. Winkelmann
 ; All rights reserved.
 ;
@@ -54,6 +54,13 @@
 
 #ifndef _SVID_SOURCE
 # define _SVID_SOURCE
+#endif
+
+/*
+ * glibc >= 2.20 synonym for _BSD_SOURCE & _SVID_SOURCE.
+ */
+#ifndef _DEFAULT_SOURCE
+# define _DEFAULT_SOURCE
 #endif
 
 /*
@@ -858,7 +865,7 @@ DECL_C_PROC_p0 (128,  1,0,0,0,0,0,0,0)
 /* This is word-size dependent: */
 #ifdef C_SIXTY_FOUR
 # define C_align(n)                C_align8(n)
-# define C_wordstobytes(n)         ((n) << 3)
+# define C_wordstobytes(n)         ((C_uword)(n) << 3)
 # define C_bytestowords(n)         (((n) + 7) >> 3)
 # define C_wordsperdouble(n)       (n)
 # define C_WORD_MIN                LONG_MIN
@@ -866,9 +873,9 @@ DECL_C_PROC_p0 (128,  1,0,0,0,0,0,0,0)
 # define C_UWORD_MAX               ULONG_MAX
 #else
 # define C_align(n)                C_align4(n)
-# define C_wordstobytes(n)         ((n) << 2)
+# define C_wordstobytes(n)         ((C_uword)(n) << 2)
 # define C_bytestowords(n)         (((n) + 3) >> 2)
-# define C_wordsperdouble(n)       ((n) << 1)
+# define C_wordsperdouble(n)       ((C_uword)(n) << 1)
 # define C_WORD_MIN                INT_MIN
 # define C_WORD_MAX                INT_MAX
 # define C_UWORD_MAX               UINT_MAX
@@ -892,7 +899,7 @@ DECL_C_PROC_p0 (128,  1,0,0,0,0,0,0,0)
 # define C__STR(x)                 #x
 # define C__CHECK_panic(a,s,f,l)                                       \
   ((a) ? (void)0 :                                                     \
-   C_panic_hook("Low-level type assertion " s " failed at " f ":" C__STR(l)))
+   C_panic_hook(C_text("Low-level type assertion " s " failed at " f ":" C__STR(l))))
 # define C__CHECK_core(v,a,s,x)                                         \
   ({ struct {                                                           \
       typeof(v) n1;                                                     \
@@ -1032,10 +1039,6 @@ DECL_C_PROC_p0 (128,  1,0,0,0,0,0,0,0)
 # define C_access                   access
 # define C_getpid                   getpid
 # define C_getenv                   getenv
-# ifdef __linux__
-extern double round(double);
-extern double trunc(double);
-# endif
 #else
 /* provide this file and define C_PROVIDE_LIBC_STUBS if you want to use
    your own libc-replacements or -wrappers */
@@ -1084,7 +1087,7 @@ extern double trunc(double);
 #endif
 #define C_stack_pointer_test       ((C_word *)C_alloca(1))
 #define C_demand_2(n)              (((C_word *)C_fromspace_top + (n)) < (C_word *)C_fromspace_limit)
-#define C_fix(n)                   (((C_word)(n) << C_FIXNUM_SHIFT) | C_FIXNUM_BIT)
+#define C_fix(n)                   ((C_word)((C_uword)(n) << C_FIXNUM_SHIFT) | C_FIXNUM_BIT)
 #define C_unfix(x)                 C_CHECKp(x,C_fixnump(C_VAL1(x)),((C_VAL1(x)) >> C_FIXNUM_SHIFT))
 #define C_make_character(c)        (((((C_uword)(c)) & C_CHAR_BIT_MASK) << C_CHAR_SHIFT) | C_CHARACTER_BITS)
 #define C_character_code(x)        C_CHECKp(x,C_charp(C_VAL1(x)),((C_word)(C_VAL1(x)) >> C_CHAR_SHIFT) & C_CHAR_BIT_MASK)
@@ -1100,7 +1103,7 @@ extern double trunc(double);
 #define C_mk_nbool(x)              ((x) ? C_SCHEME_FALSE : C_SCHEME_TRUE)
 #define C_port_file(p)             C_CHECKp(p,C_portp(C_VAL1(p)),(C_FILEPTR)C_block_item(C_VAL1(p), 0))
 #define C_data_pointer(b)          C_CHECKp(b,C_blockp((C_word)C_VAL1(b)),(void *)(((C_SCHEME_BLOCK *)(C_VAL1(b)))->data))
-#define C_fitsinfixnump(n)         (((n) & C_INT_SIGN_BIT) == (((n) & C_INT_TOP_BIT) << 1))
+#define C_fitsinfixnump(n)         (((n) & C_INT_SIGN_BIT) == ((C_uword)((n) & C_INT_TOP_BIT) << 1))
 #define C_ufitsinfixnump(n)        (((n) & (C_INT_SIGN_BIT | (C_INT_SIGN_BIT >> 1))) == 0)
 #define C_quickflonumtruncate(n)   (C_fix((C_word)C_flonum_magnitude(n)))
 #define C_and(x, y)                (C_truep(x) ? (y) : C_SCHEME_FALSE)
@@ -1218,7 +1221,7 @@ extern double trunc(double);
 #define C_fixnum_or(n1, n2)             (C_u_fixnum_or(n1, n2) | C_FIXNUM_BIT)
 #define C_fixnum_xor(n1, n2)            (((n1) ^ (n2)) | C_FIXNUM_BIT)
 #define C_fixnum_not(n)                 ((~(n)) | C_FIXNUM_BIT)
-#define C_fixnum_shift_left(n1, n2)     (C_fix(C_unfix(n1) << C_unfix(n2)))
+#define C_fixnum_shift_left(n1, n2)     (C_fix(((C_uword)C_unfix(n1) << (C_uword)C_unfix(n2))))
 #define C_fixnum_shift_right(n1, n2)    (((n1) >> C_unfix(n2)) | C_FIXNUM_BIT)
 #define C_u_fixnum_negate(n)            (-(n) + 2 * C_FIXNUM_BIT)
 #define C_fixnum_negate(n)              (C_u_fixnum_negate(n) | C_FIXNUM_BIT)
@@ -1323,8 +1326,8 @@ extern double trunc(double);
 
 #define C_tty_portp(p)                  C_mk_bool(isatty(fileno(C_port_file(p))))
 
-#define C_emit_eval_trace_info(x, y, z) C_emit_trace_info2("<eval>", x, y, z)
-#define C_emit_syntax_trace_info(x, y, z) C_emit_trace_info2("<syntax>", x, y, z)
+#define C_emit_eval_trace_info(x, y, z) C_emit_trace_info2(C_text("<eval>"), x, y, z)
+#define C_emit_syntax_trace_info(x, y, z) C_emit_trace_info2(C_text("<syntax>"), x, y, z)
 
 /* These expect C_VECTOR_TYPE to be 0: */
 #define C_vector_to_structure(v)        (C_block_header(v) |= C_STRUCTURE_TYPE, C_SCHEME_UNDEFINED)
@@ -2426,14 +2429,14 @@ C_inline C_word C_i_fixnum_max(C_word x, C_word y)
 
 C_inline C_word C_fixnum_divide(C_word x, C_word y)
 {
-  if(y == C_fix(0)) C_div_by_zero_error("fx/");
+  if(y == C_fix(0)) C_div_by_zero_error(C_text("fx/"));
   return C_u_fixnum_divide(x, y);
 }
 
 
 C_inline C_word C_fixnum_modulo(C_word x, C_word y)
 {
-  if(y == C_fix(0)) C_div_by_zero_error("fxmod");
+  if(y == C_fix(0)) C_div_by_zero_error(C_text("fxmod"));
   return C_u_fixnum_modulo(x, y);
 }
 
@@ -2470,7 +2473,7 @@ C_a_i_flonum_quotient_checked(C_word **ptr, int c, C_word n1, C_word n2)
 {
   double n3 = C_flonum_magnitude(n2);
 
-  if(n3 == 0.0) C_div_by_zero_error("fp/?");
+  if(n3 == 0.0) C_div_by_zero_error(C_text("fp/?"));
   return C_flonum(ptr, C_flonum_magnitude(n1) / n3);
 }
 
@@ -2478,7 +2481,7 @@ C_a_i_flonum_quotient_checked(C_word **ptr, int c, C_word n1, C_word n2)
 C_inline double
 C_ub_i_flonum_quotient_checked(double n1, double n2)
 {
-  if(n2 == 0.0) C_div_by_zero_error("fp/?");
+  if(n2 == 0.0) C_div_by_zero_error(C_text("fp/?"));
   return n1 / n2;
 }
 

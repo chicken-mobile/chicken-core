@@ -1,6 +1,6 @@
 ;;;; c-platform.scm - Platform specific parameters and definitions
 ;
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; Copyright (c) 2000-2007, Felix L. Winkelmann
 ; All rights reserved.
 ;
@@ -157,7 +157,7 @@
     f32vector-ref f64vector-ref f32vector-set! f64vector-set!
     u8vector-set! s8vector-set! u16vector-set! s16vector-set! u32vector-set! s32vector-set!
     locative-ref locative-set! locative->object locative?
-    null-pointer? pointer->object flonum? finite? address->pointer pointer->address
+    pointer->object flonum? finite? address->pointer pointer->address
     pointer+ pointer=?
     pointer-u8-ref pointer-s8-ref pointer-u16-ref pointer-s16-ref
     pointer-u32-ref pointer-s32-ref pointer-f32-ref pointer-f64-ref
@@ -176,7 +176,7 @@
     ##sys#check-open-port
     ##sys#check-char ##sys#check-vector ##sys#check-byte-vector ##sys#list ##sys#cons
     ##sys#call-with-values ##sys#fits-in-int? ##sys#fits-in-unsigned-int? ##sys#flonum-in-fixnum-range? 
-    ##sys#fudge ##sys#immediate? ##sys#direct-return ##sys#context-switch
+    ##sys#fudge ##sys#immediate? ##sys#context-switch
     ##sys#make-structure ##sys#apply ##sys#apply-values ##sys#continuation-graft
     ##sys#bytevector? ##sys#make-vector ##sys#setter ##sys#car ##sys#cdr ##sys#pair?
     ##sys#eq? ##sys#list? ##sys#vector? ##sys#eqv? ##sys#get-keyword
@@ -460,11 +460,10 @@
   (rewrite '##sys#apply 8 rewrite-apply) )
 
 (let ()
-  (define (rewrite-c..r op iop1 iop2 index)
+  (define (rewrite-c..r op iop1 iop2)
     (rewrite
      op 8
      (lambda (db classargs cont callargs)
-       ;; (<op> <rest-vector>) -> (##core#inline "C_i_vector_ref"/"C_slot" <rest-vector> (quote <index>))
        ;; (<op> <x>) -> (##core#inline <iop1> <x>) [safe]
        ;; (<op> <x>) -> (##core#inline <iop2> <x>) [unsafe]
        (and (= (length callargs) 1)
@@ -475,28 +474,20 @@
 		  '##core#call (list #t)
 		  (list
 		   cont
-		   (cond [(and (eq? '##core#variable (node-class arg))
-			       (eq? 'vector (get db (first (node-parameters arg)) 'rest-parameter)) )
-			  (make-node
-			   '##core#inline 
-			   (if unsafe
-			       '("C_slot")
-			       '("C_i_vector_ref") )
-			   (list arg (qnode index)) ) ]
-			 [(and unsafe iop2) (make-node '##core#inline (list iop2) callargs)]
+		   (cond [(and unsafe iop2) (make-node '##core#inline (list iop2) callargs)]
 			 [iop1 (make-node '##core#inline (list iop1) callargs)]
 			 [else (return #f)] ) ) ) ) ) ) ) ) ) )
 
-  (rewrite-c..r 'car "C_i_car" "C_u_i_car" 0)
-  (rewrite-c..r '##sys#car "C_i_car" "C_u_i_car" 0)
-  (rewrite-c..r '##sys#cdr "C_i_cdr" "C_u_i_cdr" 0)
-  (rewrite-c..r 'cadr "C_i_cadr" "C_u_i_cadr" 1)
-  (rewrite-c..r 'caddr "C_i_caddr" "C_u_i_caddr" 2)
-  (rewrite-c..r 'cadddr "C_i_cadddr" "C_u_i_cadddr" 3)
-  (rewrite-c..r 'first "C_i_car" "C_u_i_car" 0)
-  (rewrite-c..r 'second "C_i_cadr" "C_u_i_cadr" 1)
-  (rewrite-c..r 'third "C_i_caddr" "C_u_i_caddr" 2)
-  (rewrite-c..r 'fourth "C_i_cadddr" "C_u_i_cadddr" 3) )
+  (rewrite-c..r 'car "C_i_car" "C_u_i_car")
+  (rewrite-c..r '##sys#car "C_i_car" "C_u_i_car")
+  (rewrite-c..r '##sys#cdr "C_i_cdr" "C_u_i_cdr")
+  (rewrite-c..r 'cadr "C_i_cadr" "C_u_i_cadr")
+  (rewrite-c..r 'caddr "C_i_caddr" "C_u_i_caddr")
+  (rewrite-c..r 'cadddr "C_i_cadddr" "C_u_i_cadddr")
+  (rewrite-c..r 'first "C_i_car" "C_u_i_car")
+  (rewrite-c..r 'second "C_i_cadr" "C_u_i_cadr")
+  (rewrite-c..r 'third "C_i_caddr" "C_u_i_caddr")
+  (rewrite-c..r 'fourth "C_i_cadddr" "C_u_i_cadddr") )
 
 (let ([rvalues
        (lambda (db classargs cont callargs)
@@ -538,14 +529,14 @@
   (rewrite 'call-with-values 8 rewrite-c-w-v)
   (rewrite '##sys#call-with-values 8 rewrite-c-w-v) )
 
-(rewrite 'values 13 "C_values" #t)
-(rewrite '##sys#values 13 "C_values" #t)
-(rewrite 'call-with-values 13 "C_u_call_with_values" #f)
-(rewrite 'call-with-values 13 "C_call_with_values" #t)
-(rewrite '##sys#call-with-values 13 "C_u_call_with_values" #f)
-(rewrite '##sys#call-with-values 13 "C_call_with_values" #t)
-(rewrite 'locative-ref 13 "C_locative_ref" #t)
-(rewrite '##sys#continuation-graft 13 "C_continuation_graft" #t)
+(rewrite 'values 13 #f "C_values" #t)
+(rewrite '##sys#values 13 #f "C_values" #t)
+(rewrite 'call-with-values 13 2 "C_u_call_with_values" #f)
+(rewrite 'call-with-values 13 2 "C_call_with_values" #t)
+(rewrite '##sys#call-with-values 13 2 "C_u_call_with_values" #f)
+(rewrite '##sys#call-with-values 13 2 "C_call_with_values" #t)
+(rewrite 'locative-ref 13 1 "C_locative_ref" #t)
+(rewrite '##sys#continuation-graft 13 2 "C_continuation_graft" #t)
 
 (rewrite 'caar 2 1 "C_u_i_caar" #f)
 (rewrite 'cdar 2 1 "C_u_i_cdar" #f)
@@ -800,24 +791,25 @@
 (rewrite '>= 17 2 "C_i_greater_or_equalp")
 (rewrite '<= 17 2 "C_i_less_or_equalp")
 
-(rewrite '* 13 "C_times" #t)
-(rewrite '- 13 "C_minus" #t)
-(rewrite '+ 13 "C_plus" #t)
-(rewrite '/ 13 "C_divide" #t)
-(rewrite '= 13 "C_nequalp" #t)
-(rewrite '> 13 "C_greaterp" #t)
-(rewrite '< 13 "C_lessp" #t)
-(rewrite '>= 13 "C_greater_or_equal_p" #t)
-(rewrite '<= 13 "C_less_or_equal_p" #t)
+(rewrite '= 13 #f "C_nequalp" #t)
+(rewrite '> 13 #f "C_greaterp" #t)
+(rewrite '< 13 #f "C_lessp" #t)
+(rewrite '>= 13 #f "C_greater_or_equal_p" #t)
+(rewrite '<= 13 #f "C_less_or_equal_p" #t)
 
-(rewrite 'number->string 13 "C_number_to_string" #t)
-(rewrite '##sys#call-with-current-continuation 13 "C_call_cc" #t)
-(rewrite '##sys#allocate-vector 13 "C_allocate_vector" #t)
-(rewrite '##sys#ensure-heap-reserve 13 "C_ensure_heap_reserve" #t)
-(rewrite 'return-to-host 13 "C_return_to_host" #t)
-(rewrite '##sys#context-switch 13 "C_context_switch" #t)
-(rewrite '##sys#intern-symbol 13 "C_string_to_symbol" #t)
-(rewrite '##sys#make-symbol 13 "C_make_symbol" #t)
+(rewrite '* 13 #f "C_times" #t)
+(rewrite '+ 13 #f "C_plus" #t)
+(rewrite '/ 13 '(1 . #f) "C_divide" #t)
+(rewrite '- 13 '(1 . #f) "C_minus" #t)
+
+(rewrite 'number->string 13 '(1 . 2) "C_number_to_string" #t)
+(rewrite '##sys#call-with-current-continuation 13 1 "C_call_cc" #t)
+(rewrite '##sys#allocate-vector 13 4 "C_allocate_vector" #t)
+(rewrite '##sys#ensure-heap-reserve 13 1 "C_ensure_heap_reserve" #t)
+(rewrite 'return-to-host 13 0 "C_return_to_host" #t)
+(rewrite '##sys#context-switch 13 1 "C_context_switch" #t)
+(rewrite '##sys#intern-symbol 13 1 "C_string_to_symbol" #t)
+(rewrite '##sys#make-symbol 13 1 "C_make_symbol" #t)
 
 (rewrite 'even? 14 'fixnum 1 "C_i_fixnumevenp" "C_i_fixnumevenp")
 (rewrite 'odd? 14 'fixnum 1 "C_i_fixnumoddp" "C_i_fixnumoddp")
@@ -870,8 +862,8 @@
 
 (rewrite 'cons 16 2 "C_a_i_cons" #t 3)
 (rewrite '##sys#cons 16 2 "C_a_i_cons" #t 3)
-(rewrite 'list 16 #f "C_a_i_list" #t '(3) #t)
-(rewrite '##sys#list 16 #f "C_a_i_list" #t '(3))
+(rewrite 'list 16 #f "C_a_i_list" #t '(1 3) #t)
+(rewrite '##sys#list 16 #f "C_a_i_list" #t '(1 3))
 (rewrite 'vector 16 #f "C_a_i_vector" #t #t #t)
 (rewrite '##sys#vector 16 #f "C_a_i_vector" #t #t)
 (rewrite '##sys#make-structure 16 #f "C_a_i_record" #t #t #t)
@@ -971,7 +963,6 @@
 (rewrite '##sys#flonum-in-fixnum-range? 17 1 "C_flonum_in_fixnum_range_p")
 (rewrite '##sys#permanent? 17 1 "C_permanentp")
 (rewrite '##sys#null-pointer? 17 1 "C_null_pointerp" "C_null_pointerp")
-(rewrite 'null-pointer? 17 1 "C_i_null_pointerp" "C_null_pointerp")
 (rewrite '##sys#immediate? 17 1 "C_immp")
 (rewrite 'locative->object 17 1 "C_i_locative_to_object")
 (rewrite 'locative-set! 17 2 "C_i_locative_set")
@@ -984,7 +975,6 @@
 (rewrite '##sys#foreign-pointer-argument 17 1 "C_i_foreign_pointer_argumentp")
 (rewrite '##sys#foreign-integer-argument 17 1 "C_i_foreign_integer_argumentp")
 (rewrite '##sys#foreign-unsigned-integer-argument 17 1 "C_i_foreign_unsigned_integer_argumentp")
-(rewrite '##sys#direct-return 17 2 "C_direct_return")
 
 (rewrite 'blob-size 2 1 "C_block_size" #f)
 

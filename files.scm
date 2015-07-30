@@ -1,6 +1,6 @@
 ;;;; files.scm - File and pathname operations
 ;
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; Copyright (c) 2000-2007, Felix L. Winkelmann
 ; All rights reserved.
 ;
@@ -370,9 +370,7 @@ EOF
 		   (when (fx> i prev)
 		     (set! parts (addpart (##sys#substring path prev i) parts)))
 		   (if (null? parts)
-		       (let ((r (if abspath
-				    (##sys#string-append (string sep) ".")
-				    (##sys#string-append "." (string sep)) )))
+		       (let ((r (if abspath (string sep) ".")))
 			 (if drive
 			     (##sys#string-append drive r)
 			     r))

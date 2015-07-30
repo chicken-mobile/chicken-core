@@ -1,6 +1,6 @@
 ;;;; posixwin.scm - Miscellaneous file- and process-handling routines, available on Windows
 ;
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; Copyright (c) 2000-2007, Felix L. Winkelmann
 ; All rights reserved.
 ;
@@ -809,34 +809,6 @@ EOF
 	      (values fd tmpl)))))))
 
 ;;; Directory stuff:
-
-(define-inline (create-directory-helper name)
-  (unless (fx= 0 (##core#inline "C_mkdir" (##sys#make-c-string name 'create-directory)))
-    (##sys#update-errno)
-    (##sys#signal-hook #:file-error 'create-directory
-		       "cannot create directory" name)))
-
-(define-inline (create-directory-helper-silent name)
-  (unless (##sys#file-exists? name #f #t #f)
-    (create-directory-helper name)))
-
-(define-inline (create-directory-helper-parents name)
-  (let* ((l   (string-split name "/\\"))
-	 (c   (car l)))
-    (for-each
-     (lambda (x)
-       (set! c (string-append c "/" x))
-       (create-directory-helper-silent c))
-     (cdr l))))
-
-(define create-directory
-  (lambda (name #!optional parents?)
-    (##sys#check-string name 'create-directory)
-    (let ((name name))
-      (if parents?
-          (create-directory-helper-parents name)
-          (create-directory-helper name))
-      name)))
 
 (define change-directory
   (lambda (name)

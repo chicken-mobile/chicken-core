@@ -223,6 +223,9 @@ $compile -s square-functor.import.scm
 $interpret -bnq use-square-functor.scm
 $compile use-square-functor.scm
 ./a.out
+$compile -s use-square-functor.scm -J
+$interpret -nqe '(import sf1)' -e '(import sf2)'
+rm -f sf1.import.* sf2.import.* lst.import.* mod.import.*
 
 echo "======================================== compiler syntax tests ..."
 $compile compiler-syntax-tests.scm
@@ -340,6 +343,9 @@ $compile posix-tests.scm
 rm -fr tmpdir
 mkdir tmpdir
 touch tmpdir/.dotfile
+
+echo "======================================== find-files tests ..."
+$interpret -bnq test-find-files.scm
 
 if test -z "$MSYSTEM"; then
     ln -s /usr tmpdir/symlink

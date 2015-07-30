@@ -5,7 +5,7 @@
 ;
 ;
 ;--------------------------------------------------------------------------------------------
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; Copyright (c) 2000-2007, Felix L. Winkelmann
 ; All rights reserved.
 ;
@@ -1481,7 +1481,7 @@
 	      (for-each 
 	       (cut mark-variable <> '##compiler#pure #t) 
 	       (globalize-all syms))
-	      (quit "invalid arguments to `constant' declaration: ~S" spec)) ) )
+	      (quit "invalid arguments to `pure' declaration: ~S" spec))))
        ((emit-import-library)
 	(set! import-libraries
 	  (append

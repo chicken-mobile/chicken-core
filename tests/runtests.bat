@@ -249,6 +249,11 @@ if errorlevel 1 exit /b 1
 if errorlevel 1 exit /b 1
 a.out
 if errorlevel 1 exit /b 1
+%compile% -s use-square-functor.scm -J
+if errorlevel 1 exit /b 1
+%interpret% -nqe "(import sf1)" -e "(import sf2)"
+if errorlevel 1 exit /b 1
+del /f /q sf1.import.* sf2.import.* lst.import.* mod.import.*
 
 echo ======================================== compiler syntax tests ...
 %compile% compiler-syntax-tests.scm
@@ -411,6 +416,10 @@ del /f /q /s tmpdir
 mkdir tmpdir
 echo 0 >tmpdir\.dotfile
 %interpret% -R posix -e "(delete-directory \"tmpdir\" #t)"
+if errorlevel 1 exit /b 1
+
+echo ======================================== find-files tests ...
+%interpret% -bnq test-find-files.scm
 if errorlevel 1 exit /b 1
 
 echo ======================================== regular expression tests ...

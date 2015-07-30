@@ -1,6 +1,6 @@
 # defaults.make - default settings -*- Makefile -*-
 #
-# Copyright (c) 2008-2014, The CHICKEN Team
+# Copyright (c) 2008-2015, The CHICKEN Team
 # Copyright (c) 2007, Felix L. Winkelmann
 # All rights reserved.
 #
@@ -88,7 +88,7 @@ MAKEDIR_COMMAND ?= -mkdir
 else
 REMOVE_COMMAND ?= rm
 INSTALL_PROGRAM ?= install
-MAKEDIR_COMMAND ?= install
+MAKEDIR_COMMAND ?= $(INSTALL_PROGRAM)
 endif
 POSTINSTALL_STATIC_LIBRARY ?= true
 POSTINSTALL_PROGRAM ?= true
@@ -256,7 +256,7 @@ endif
 CHICKEN_OPTIONS += $(EXTRA_CHICKEN_OPTIONS)
 CHICKEN_LIBRARY_OPTIONS = $(CHICKEN_OPTIONS) -explicit-use -no-trace
 CHICKEN_PROGRAM_OPTIONS = $(CHICKEN_OPTIONS) -no-lambda-info -local
-CHICKEN_COMPILER_OPTIONS = $(CHICKEN_PROGRAM_OPTIONS) -extend private-namespace.scm
+CHICKEN_COMPILER_OPTIONS = $(CHICKEN_OPTIONS) -no-lambda-info -extend private-namespace.scm
 CHICKEN_DYNAMIC_OPTIONS = $(CHICKEN_OPTIONS) -feature chicken-compile-shared -dynamic
 CHICKEN_IMPORT_LIBRARY_OPTIONS = $(CHICKEN_DYNAMIC_OPTIONS) -no-trace
 

@@ -444,8 +444,7 @@ Returns a keyword with the name {{STRING}}.
 
 Return a list of all supplied command-line arguments. The first item in
 the list is a string containing the name of the executing program. The
-other items are the arguments passed to the application. This list is
-freshly created on every invocation of {{(argv)}}. It depends on
+other items are the arguments passed to the application. It depends on
 the host-shell whether arguments are expanded ('globbed') or not.
 
 
@@ -572,17 +571,6 @@ process is currently running, which is one of the following:
  aix
  hurd
  unknown
-
-
-
-==== c-runtime
-
-<procedure>(c-runtime)</procedure>
-
-Returns a symbol that designates what kind of C runtime library has been linked
-with this version of the CHICKEN libraries. Possible return values are
-{{static}}, {{dynamic}} or {{unknown}}. On systems not compiled with the
-Microsoft C compiler, {{c-runtime}} always returns {{unknown}}.
 
 
 ==== system
@@ -818,7 +806,7 @@ Returns {{#t}} if {{X}} is a promise returned by {{delay}}, or
 
 <procedure>(equal=? X y)</procedure>
 
-Similar to the standard parocedure {{equal?}}, but compares numbers
+Similar to the standard procedure {{equal?}}, but compares numbers
 using the {{=}} operator, so {{equal=?}} allows structural comparison
 in combination with comparison of numerical data by value.
 

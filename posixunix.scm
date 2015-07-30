@@ -1,6 +1,6 @@
 ;;;; posixunix.scm - Miscellaneous file- and process-handling routines
 ;
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; Copyright (c) 2000-2007, Felix L. Winkelmann
 ; All rights reserved.
 ;
@@ -611,24 +611,6 @@ EOF
 
 ;;; Directory stuff:
 
-(define-inline (*create-directory loc name)
-  (unless (fx= 0 (##core#inline "C_mkdir" (##sys#make-c-string name loc)))
-    (posix-error #:file-error loc "cannot create directory" name)) )
-
-(define create-directory
-  (lambda (name #!optional parents?)
-    (##sys#check-string name 'create-directory)
-    (unless (or (fx= 0 (##sys#size name))
-                (file-exists? name))
-      (if parents?
-        (let loop ((dir (let-values (((dir file ext) (decompose-pathname name)))
-                          (if file (make-pathname dir file ext) dir))))
-          (when (and dir (not (directory? dir)))
-            (loop (pathname-directory dir))
-            (*create-directory 'create-directory dir)) )
-        (*create-directory 'create-directory name) ) )
-    name))
-
 (define change-directory
   (lambda (name)
     (##sys#check-string name 'change-directory)
@@ -1174,7 +1156,7 @@ EOF
 	       (let ((res (##sys#file-select-one fd)))
 		 (if (fx= -1 res)
 		     (if (or (fx= _errno _ewouldblock)
-			     (rx= _errno _eagain))
+			     (fx= _errno _eagain))
 			 #f
 			 (posix-error #:file-error loc "cannot select" fd nam))
 		     (fx= 1 res))))]

@@ -1,6 +1,6 @@
 ;;;; expand.scm - The HI/LO expander
 ;
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; All rights reserved.
 ;
 ; Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following
@@ -1174,9 +1174,12 @@
                          (and (pair? (car clause))
                               (c (r 'quote) (caar clause))))
 		     (expand rclauses (strip-syntax (car clause)))
-		     (if (null? (cdr clause))
-			 (car clause)
-			 `(##core#begin ,@(cdr clause))))
+		     (cond ((and (fx= (length clause) 3)
+				 (c %=> (cadr clause)))
+			    `(,(caddr clause) ,(car clause)))
+			   ((null? (cdr clause))
+			    (car clause))
+			   (else `(##core#begin ,@(cdr clause)))))
 		    ((null? (cdr clause)) 
 		     `(,%or ,(car clause) ,(expand rclauses #f)))
 		    ((and (fx= (length clause) 3)

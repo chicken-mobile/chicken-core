@@ -1,6 +1,6 @@
 /* runtime.c - Runtime code for compiler generated executables
 ;
-; Copyright (c) 2008-2014, The CHICKEN Team
+; Copyright (c) 2008-2015, The CHICKEN Team
 ; Copyright (c) 2000-2007, Felix L. Winkelmann
 ; All rights reserved.
 ;
@@ -64,7 +64,7 @@
 #endif
 
 /* TODO: Include sys/select.h? Windows doesn't seem to have it... */
-#ifdef HAVE_POSIX_POLL
+#ifndef NO_POSIX_POLL
 #  include <poll.h>
 #endif
 
@@ -218,7 +218,7 @@ extern void _C_do_apply_hack(void *proc, C_word *args, int count) C_noret;
 
 #define is_fptr(x)                   (((x) & C_GC_FORWARDING_BIT) != 0)
 #define ptr_to_fptr(x)               ((((x) >> FORWARDING_BIT_SHIFT) & 1) | C_GC_FORWARDING_BIT | ((x) & ~1))
-#define fptr_to_ptr(x)               (((x) << FORWARDING_BIT_SHIFT) | ((x) & ~(C_GC_FORWARDING_BIT | 1)))
+#define fptr_to_ptr(x)               (((C_uword)(x) << FORWARDING_BIT_SHIFT) | ((x) & ~(C_GC_FORWARDING_BIT | 1)))
 
 #define C_check_flonum(x, w)        if(C_immediatep(x) || C_block_header(x) != C_FLONUM_TAG) \
                                        barf(C_BAD_ARGUMENT_TYPE_NO_FLONUM_ERROR, w, x);
@@ -639,6 +639,10 @@ int CHICKEN_initialize(int heap, int stack, int symbols, void *toplevel)
 
   if(chicken_is_initialized) return 1;
   else chicken_is_initialized = 1;
+
+#if defined(__ANDROID__) && defined(DEBUGBUILD)
+  debug_mode = 2;
+#endif
 
   if(debug_mode) 
     C_dbg(C_text("debug"), C_text("application startup...\n"));
@@ -1754,6 +1758,21 @@ void barf(int code, char *loc, ...)
     c = 1;
     break;
 
+  case C_ILLEGAL_INSTRUCTION_ERROR:
+    msg = C_text("illegal instruction");
+    c = 0;
+    break;
+
+  case C_BUS_ERROR:
+    msg = C_text("bus error");
+    c = 0;
+    break;
+
+  case C_FLOATING_POINT_EXCEPTION_ERROR:
+    msg = C_text("floating point exception");
+    c = 0;
+    break;
+
   default: panic(C_text("illegal internal error code"));
   }
   
@@ -2783,6 +2802,7 @@ C_regparm void C_fcall C_reclaim(void *trampoline, void *proc)
     if(gc_mode == GC_REALLOC) {
       C_rereclaim2(percentage(heap_size, C_heap_growth), 0);
       gc_mode = GC_MAJOR;
+      count = (C_uword)tospace_top - (C_uword)tospace_start;
       goto i_like_spaghetti;
     }
 
@@ -2798,11 +2818,13 @@ C_regparm void C_fcall C_reclaim(void *trampoline, void *proc)
 
     /* Mark literal frames: */
     for(lfn = lf_list; lfn != NULL; lfn = lfn->next)
-      for(i = 0; i < lfn->count; mark(&lfn->lf[ i++ ]));
+      for(i = 0; i < lfn->count; ++i)
+        mark(&lfn->lf[i]);
 
     /* Mark symbol tables: */
     for(stp = symbol_table_list; stp != NULL; stp = stp->next)
-      for(i = 0; i < stp->size; mark(&stp->table[ i++ ]));
+      for(i = 0; i < stp->size; ++i)
+        mark(&stp->table[i]);
 
     /* Mark collectibles: */
     for(msp = collectibles; msp < collectibles_top; ++msp)
@@ -2817,14 +2839,16 @@ C_regparm void C_fcall C_reclaim(void *trampoline, void *proc)
   }
   else {
     /* Mark mutated slots: */
-    for(msp = mutation_stack_bottom; msp < mutation_stack_top; mark(*(msp++)));
+    for(msp = mutation_stack_bottom; msp < mutation_stack_top; ++msp)
+      mark(*msp);
   }
 
   /* Clear the mutated slot stack: */
   mutation_stack_top = mutation_stack_bottom;
 
   /* Mark live values: */
-  for(p = C_temporary_stack; p < C_temporary_stack_bottom; mark(p++));
+  for(p = C_temporary_stack; p < C_temporary_stack_bottom; ++p)
+    mark(p);
 
   /* Mark trace-buffer: */
   for(tinfo = trace_buffer; tinfo < trace_buffer_limit; ++tinfo) {
@@ -3300,11 +3324,13 @@ C_regparm void C_fcall C_rereclaim2(C_uword size, int double_plus)
 
   /* Mark literal frames: */
   for(lfn = lf_list; lfn != NULL; lfn = lfn->next)
-    for(i = 0; i < lfn->count; remark(&lfn->lf[ i++ ]));
+    for(i = 0; i < lfn->count; ++i)
+      remark(&lfn->lf[i]);
 
   /* Mark symbol table: */
   for(stp = symbol_table_list; stp != NULL; stp = stp->next)
-    for(i = 0; i < stp->size; remark(&stp->table[ i++ ]));
+    for(i = 0; i < stp->size; ++i)
+      remark(&stp->table[i]);
 
   /* Mark collectibles: */
   for(msp = collectibles; msp < collectibles_top; ++msp)
@@ -3319,7 +3345,8 @@ C_regparm void C_fcall C_rereclaim2(C_uword size, int double_plus)
   mutation_stack_top = mutation_stack_bottom;
 
   /* Mark live values: */
-  for(p = C_temporary_stack; p < C_temporary_stack_bottom; remark(p++));
+  for(p = C_temporary_stack; p < C_temporary_stack_bottom; ++p)
+    remark(p);
 
   /* Mark locative table: */
   for(i = 0; i < locative_table_count; ++i)
@@ -4125,12 +4152,7 @@ C_regparm C_word C_fcall C_execute_shell_command(C_word string)
  */
 C_regparm int C_fcall C_check_fd_ready(int fd)
 {
-#ifdef HAVE_POSIX_POLL
-  struct pollfd ps;
-  ps.fd = fd;
-  ps.events = POLLIN;
-  return poll(&ps, 1, 0);
-#else
+#ifdef NO_POSIX_POLL
   fd_set in;
   struct timeval tm;
   int rv;
@@ -4140,6 +4162,11 @@ C_regparm int C_fcall C_check_fd_ready(int fd)
   rv = select(fd + 1, &in, NULL, NULL, &tm);
   if(rv > 0) { rv = FD_ISSET(fd, &in) ? 1 : 0; }
   return rv;
+#else
+  struct pollfd ps;
+  ps.fd = fd;
+  ps.events = POLLIN;
+  return poll(&ps, 1, 0);
 #endif
 }
 
@@ -5294,7 +5321,7 @@ C_regparm C_word C_fcall C_a_i_arithmetic_shift(C_word **a, int c, C_word n1, C_
 
   if(sgn < 0) {
     if(s < 0) nn >>= -s;
-    else nn <<= s;
+    else nn = (C_word)((C_uword)nn << s);
 
     if(C_fitsinfixnump(nn)) return C_fix(nn);
     else return C_flonum(a, nn);
@@ -7611,7 +7638,7 @@ C_regparm C_word C_fcall convert_string_to_number(C_char *str, int radix, C_word
 
     return 0;
   }
-  else if((n & C_INT_SIGN_BIT) != ((n << 1) & C_INT_SIGN_BIT)) { /* doesn't fit into fixnum? */
+  else if((n & C_INT_SIGN_BIT) != (((C_uword)n << 1) & C_INT_SIGN_BIT)) { /* doesn't fit into fixnum? */
     if(*eptr == '\0' || !C_strncmp(eptr, ".0", C_strlen(eptr))) {
       *flo = (double)n;
       return 2;
@@ -7921,7 +7948,7 @@ void C_ccall C_peek_signed_integer(C_word c, C_word closure, C_word k, C_word v,
   C_word x = C_block_item(v, C_unfix(index));
   C_alloc_flonum;
 
-  if((x & C_INT_SIGN_BIT) != ((x << 1) & C_INT_SIGN_BIT)) {
+  if((x & C_INT_SIGN_BIT) != (((C_uword)x << 1) & C_INT_SIGN_BIT)) {
     C_kontinue_flonum(k, (double)x);
   }
 
@@ -7934,7 +7961,7 @@ void C_ccall C_peek_unsigned_integer(C_word c, C_word closure, C_word k, C_word 
   C_word x = C_block_item(v, C_unfix(index));
   C_alloc_flonum;
 
-  if((x & C_INT_SIGN_BIT) || ((x << 1) & C_INT_SIGN_BIT)) {
+  if((x & C_INT_SIGN_BIT) || (((C_uword)x << 1) & C_INT_SIGN_BIT)) {
     C_kontinue_flonum(k, (double)(C_uword)x);
   }
 
@@ -8832,10 +8859,10 @@ static C_regparm C_word C_fcall decode_literal2(C_word **ptr, C_char **str,
       return (C_word)(*(*str - 1));
 
     case C_FIXNUM_BIT:
-      val = *((*str)++) << 24; /* always big endian */
-      val |= (*((*str)++) & 0xff) << 16;
-      val |= (*((*str)++) & 0xff) << 8;
-      val |= (*((*str)++) & 0xff);
+      val = (C_uword)*((*str)++) << 24; /* always big endian */
+      val |= ((C_uword)*((*str)++) & 0xff) << 16;
+      val |= ((C_uword)*((*str)++) & 0xff) << 8;
+      val |= ((C_uword)*((*str)++) & 0xff);
       return C_fix(val); 
 
 #ifdef C_SIXTY_FOUR

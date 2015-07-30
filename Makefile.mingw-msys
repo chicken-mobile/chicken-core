@@ -1,6 +1,6 @@
 # Makefile.mingw - configuration for MinGW (MSYS) -*- Makefile -*-
 #
-# Copyright (c) 2008-2014, The CHICKEN Team
+# Copyright (c) 2008-2015, The CHICKEN Team
 # Copyright (c) 2007, Felix L. Winkelmann
 # All rights reserved.
 #
@@ -70,6 +70,8 @@ INSTALL_PROGRAM_SHARED_LIBRARY_OPTIONS = -r
 INSTALL_PROGRAM_STATIC_LIBRARY_OPTIONS = -r
 INSTALL_PROGRAM_EXECUTABLE_OPTIONS = -r
 INSTALL_PROGRAM_FILE_OPTIONS = -r
+MAKEDIR_COMMAND = mkdir
+MAKEDIR_COMMAND_OPTIONS = -p
 
 # special files
 
@@ -89,6 +91,7 @@ chicken-config.h: chicken-defaults.h
 	echo "#define HAVE_LONG_LONG 1" >>$@
 	echo "#define HAVE_MEMMOVE 1" >>$@
 	echo "#define HAVE_MEMORY_H 1" >>$@
+	echo "#define NO_POSIX_POLL 1" >>$@
 	echo "#define HAVE_STDINT_H 1" >>$@
 	echo "#define HAVE_STDLIB_H 1" >>$@
 	echo "#define HAVE_STRERROR 1" >>$@
