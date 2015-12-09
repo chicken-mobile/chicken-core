@@ -66,8 +66,6 @@
 
 (define units-used-by-default '(library eval chicken-syntax)) 
 (define words-per-flonum 4)
-(define parameter-limit 1024)
-(define small-parameter-limit 128)
 (define unlikely-variables '(unquote unquote-splicing))
 
 (define eq-inline-operator "C_eqp")
@@ -622,10 +620,15 @@
 (rewrite 'string-set! 2 3 "C_i_string_set" #t)
 (rewrite 'vector-ref 2 2 "C_slot" #f)
 (rewrite 'vector-ref 2 2 "C_i_vector_ref" #t)
-(rewrite 'char=? 2 2 "C_i_char_equalp" #t)   ; a bit of a lie: won't crash but accepts garbage
+(rewrite 'char=? 2 2 "C_u_i_char_equalp" #f)
+(rewrite 'char=? 2 2 "C_i_char_equalp" #t)
+(rewrite 'char>? 2 2 "C_u_i_char_greaterp" #f)
 (rewrite 'char>? 2 2 "C_i_char_greaterp" #t)
+(rewrite 'char<? 2 2 "C_u_i_char_lessp" #f)
 (rewrite 'char<? 2 2 "C_i_char_lessp" #t)
+(rewrite 'char>=? 2 2 "C_u_i_char_greater_or_equal_p" #f)
 (rewrite 'char>=? 2 2 "C_i_char_greater_or_equal_p" #t)
+(rewrite 'char<=? 2 2 "C_u_i_char_less_or_equal_p" #f)
 (rewrite 'char<=? 2 2 "C_i_char_less_or_equal_p" #t)
 (rewrite '##sys#slot 2 2 "C_slot" #t)		; consider as safe, the primitive is unsafe anyway.
 (rewrite '##sys#block-ref 2 2 "C_i_block_ref" #t) ;XXX must be safe for pattern matcher (anymore?)
@@ -862,8 +865,8 @@
 
 (rewrite 'cons 16 2 "C_a_i_cons" #t 3)
 (rewrite '##sys#cons 16 2 "C_a_i_cons" #t 3)
-(rewrite 'list 16 #f "C_a_i_list" #t '(1 3) #t)
-(rewrite '##sys#list 16 #f "C_a_i_list" #t '(1 3))
+(rewrite 'list 16 #f "C_a_i_list" #t '(0 3) #t)
+(rewrite '##sys#list 16 #f "C_a_i_list" #t '(0 3))
 (rewrite 'vector 16 #f "C_a_i_vector" #t #t #t)
 (rewrite '##sys#vector 16 #f "C_a_i_vector" #t #t)
 (rewrite '##sys#make-structure 16 #f "C_a_i_record" #t #t #t)

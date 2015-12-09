@@ -147,7 +147,7 @@ EOF
       (set! absolute-pathname-root (lambda (pn) (irregex-match rx pn)))
       (set! root-origin (lambda (rt) (and rt (irregex-match-substring rt 1))))
       (set! root-directory (lambda (rt) (and rt (irregex-match-substring rt 2)))) )
-    (let ((rx (irregex "([\\/\\\\]).*")))
+    (let ((rx (irregex "(/).*")))
       (set! absolute-pathname-root (lambda (pn) (irregex-match rx pn)))
       (set! root-origin (lambda (rt) #f))
       (set! root-directory (lambda (rt) (and rt (irregex-match-substring rt 1)))) ) )
@@ -156,7 +156,10 @@ EOF
   (##sys#check-string pn 'absolute-pathname?)
   (irregex-match-data? (absolute-pathname-root pn)) )
 
-(define-inline (*char-pds? ch) (memq ch '(#\\ #\/)))
+(define-inline (*char-pds? ch) 
+  (if ##sys#windows-platform 
+      (memq ch '(#\\ #\/))
+      (eq? #\/ ch)))
 
 (define (chop-pds str)
   (and str
@@ -171,7 +174,7 @@ EOF
 (define make-pathname)
 (define make-absolute-pathname)
 
-(let ()
+(let ((pds (if ##sys#windows-platform "\\" "/")))
 
   (define (conc-dirs dirs)
     (##sys#check-list dirs 'make-pathname)
@@ -183,7 +186,7 @@ EOF
 		(loop (cdr strs))
 		(string-append 
 		 (chop-pds (car strs))
-		 "/"
+		 pds
 		 (loop (cdr strs))) ) ) ) ) )
 
   (define (canonicalize-dirs dirs)
@@ -221,12 +224,16 @@ EOF
        (let ((dir (canonicalize-dirs dirs)))
 	 (if (absolute-pathname? dir)
 	     dir
-	     (##sys#string-append "/"dir)) )
+	     (##sys#string-append pds dir)) )
        file ext) ) ) )
 
 (define decompose-pathname
-  (let* ([patt1 "^(.*[\\/\\\\])?([^\\/\\\\]+)(\\.([^\\/\\\\.]+))$"]
-	 [patt2 "^(.*[\\/\\\\])?((\\.)?[^\\/\\\\]+)$"]
+  (let* ((patt1 (if ##sys#windows-platform
+                    "^(.*[\\/\\\\])?([^\\/\\\\]+)(\\.([^\\/\\\\.]+))$"
+                    "^(.*/)?([^/]+)(\\.([^/.]+))$"))
+	 (patt2 (if ##sys#windows-platform
+                    "^(.*[\\/\\\\])?((\\.)?[^\\/\\\\]+)$"
+                    "^(.*/)?((\\.)?[^/]+)$"))
 	 [rx1 (irregex patt1)]
 	 [rx2 (irregex patt2)]
 	 [strip-pds
@@ -361,19 +368,21 @@ EOF
             (else (cons part parts) ) ) )
     (lambda (path #!optional (platform bldplt))
       (let ((sep (if (eq? platform 'windows) #\\ #\/)))
+        (define (pds? c)
+          (if (eq? platform 'windows)
+              (memq c '(#\/ #\\))
+              (eq? c #\/)))
 	(##sys#check-string path 'normalize-pathname)
 	(let ((len (##sys#size path))
-	      (abspath #f)
+	      (type #f)
 	      (drive #f))
 	  (let loop ((i 0) (prev 0) (parts '()))
 	    (cond ((fx>= i len)
 		   (when (fx> i prev)
 		     (set! parts (addpart (##sys#substring path prev i) parts)))
 		   (if (null? parts)
-		       (let ((r (if abspath (string sep) ".")))
-			 (if drive
-			     (##sys#string-append drive r)
-			     r))
+		       (let ((r (if (eq? type 'abs) (string sep) ".")))
+			 (if drive (##sys#string-append drive r) r))
 		       (let ((out (open-output-string))
 			     (parts (##sys#fast-reverse parts)))
 			 (display (car parts) out)
@@ -384,14 +393,14 @@ EOF
 			  (cdr parts))
 			 (when (fx= i prev) (##sys#write-char-0 sep out))
 			 (let ((r (get-output-string out)))
-                           (when abspath
-                             (set! r (##sys#string-append (string sep) r)))
-                           (when drive
-                             (set! r (##sys#string-append drive r)))
-                           r))))
-		  ((*char-pds? (string-ref path i))
-		   (when (and (null? parts) (fx= i prev))
-		     (set! abspath #t))
+			   (when (eq? type 'abs)
+			     (set! r (##sys#string-append (string sep) r)))
+			   (when drive
+			     (set! r (##sys#string-append drive r)))
+			   r))))
+		  ((pds? (string-ref path i))
+		   (when (not type)
+		     (set! type (if (fx= i prev) 'abs 'rel)))
 		   (if (fx= i prev)
 		       (loop (fx+ i 1) (fx+ i 1) parts)
 		       (loop (fx+ i 1)
@@ -399,7 +408,7 @@ EOF
 			     (addpart (##sys#substring path prev i) parts))))
 		  ((and (null? parts) 
 			(char=? (string-ref path i) #\:)
-			(eq? 'windows platform))
+			(eq? platform 'windows))
 		   (set! drive (##sys#substring path 0 (fx+ i 1)))
 		   (loop (fx+ i 1) (fx+ i 1) '()))
 		  (else (loop (fx+ i 1) prev parts)) ) ) ) ) ) ) )
@@ -411,7 +420,7 @@ EOF
 (define split-directory
   (lambda (loc dir keep?)
     (##sys#check-string dir loc)
-    (string-split dir "/\\" keep?) ) )
+    (string-split dir (if ##sys#windows-platform "/\\" "/") keep?) ) )
 
 ;; Directory string or list only contains path-separators
 ;; and/or current-directory (".") names.

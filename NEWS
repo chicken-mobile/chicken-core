@@ -1,4 +1,54 @@
-4.9.1
+4.10.2
+
+- Security fixes
+  - Specialisation rules for string-{ref,set!}, bit-set?
+    and move-memory no longer use unchecked C functions which could
+    result in undefined behaviour, including buffer overruns (#1216).
+
+- Platform support
+  - CHICKEN now supports the Linux X32 ABI (thanks to Sven Hartrumpf).
+
+- Runtime system:
+  - Compiled programs with large literals won't crash on startup (#1221).
+  - Comparisons of closures now behave in a stable way, whether or not
+     the code was compiled with the -no-lambda-info option (#1041).
+
+- Compiler:
+  - Specializations on implicit "or" types like "number" or "boolean" now
+     work, removing the requirement for the inferred types to match
+     declared types exactly.  Specializations are matched from first to
+     last to resolve ambiguities (#1214).
+  - Compiler rewrites for char{<,>,<=,>=,=}? are now safe (#1122).
+
+- Core libraries
+   - SRFI-18: thread-join! no longer gives an error when passed a
+      thread in the "sleeping" state (thanks to Joerg Wittenberger)
+
+- Unit "posix": The following posix procedures now work on port
+    objects: file-stat, file-size, file-owner, file-permissions,
+    file-modification-time, file-access-time, file-change-time,
+    file-type and all procedures using file-type. These are:
+    regular-file?, symbolic-link?, block-device?, character-device?
+    fifo? and socket?.
+
+4.10.1
+
+- Core libraries
+  - try-compile from setup-api cleans up temporary output files (#1213).
+
+- Runtime system:
+  - The calling convention of CPS procedures has been changed to
+    use "argument vectors" instead of C calling convention.
+  - The C API of C_values(), C_do_apply() and how to invoke CPS
+    functions has changed.  The C_procN() macros have disappeared.
+    The manual example in "Accessing external objects" for C_values
+    has been updated.  See also the "numbers" egg for examples on
+    how to support pre- and post-4.10.1 CHICKENs simultaneously.
+  - Apply hack is no longer used; the limitation of 128 arguments
+    has been lifted for platforms which had no apply hack.
+  - Increased the "binary compatibility version" to 8.
+
+4.10.0
 
 - Security fixes
   - CVE-2014-6310: Use POSIX poll() on Android platform to avoid
@@ -34,6 +84,10 @@
 
 - Unit lolevel:
   - Restore long-lost but still documented "vector-like?" procedure (#983)
+
+- Unit "files":
+  - normalize-pathname no longer considers paths starting with ".//"
+    as absolute (#1202, reported by Haochi Kiang).
 
 - Unit "posix":
   - set-file-position! now allows negative positions for seek/cur (thanks

@@ -37,7 +37,7 @@
 #define ___CHICKEN
 
 #define C_MAJOR_VERSION   4
-#define C_MINOR_VERSION   9
+#define C_MINOR_VERSION   10
 
 #ifndef _ISOC99_SOURCE
 # define _ISOC99_SOURCE
@@ -910,7 +910,7 @@ typedef void (C_ccall *C_proc)(C_word, C_word *) C_noret;
 # define C_fputs                    fputs
 # define C_fputc                    fputc
 # define C_putchar                  putchar
-# if (defined getc_unlocked || _POSIX_C_SOURCE >= 199506L)
+# if (defined getc_unlocked || _POSIX_C_SOURCE >= 199506L) && !defined(__MINGW32__)
 #  define C_getc                    getc_unlocked
 # else
 #  define C_getc                    getc
@@ -1189,11 +1189,11 @@ typedef void (C_ccall *C_proc)(C_word, C_word *) C_noret;
 
 #define C_fix_to_char(x)                (C_make_character(C_unfix(x)))
 #define C_char_to_fix(x)                (C_fix(C_character_code(x)))
-#define C_i_char_equalp(x, y)           C_mk_bool(C_character_code(x) == C_character_code(y))
-#define C_i_char_greaterp(x, y)         C_mk_bool(C_character_code(x) > C_character_code(y))
-#define C_i_char_lessp(x, y)            C_mk_bool(C_character_code(x) < C_character_code(y))
-#define C_i_char_greater_or_equal_p(x, y)  C_mk_bool(C_character_code(x) >= C_character_code(y))
-#define C_i_char_less_or_equal_p(x, y)  C_mk_bool(C_character_code(x) <= C_character_code(y))
+#define C_u_i_char_equalp(x, y)         C_mk_bool(C_character_code(x) == C_character_code(y))
+#define C_u_i_char_greaterp(x, y)       C_mk_bool(C_character_code(x) > C_character_code(y))
+#define C_u_i_char_lessp(x, y)          C_mk_bool(C_character_code(x) < C_character_code(y))
+#define C_u_i_char_greater_or_equal_p(x, y) C_mk_bool(C_character_code(x) >= C_character_code(y))
+#define C_u_i_char_less_or_equal_p(x, y) C_mk_bool(C_character_code(x) <= C_character_code(y))
 #define C_substring_copy(s1, s2, start1, end1, start2) \
                                         (C_memmove((C_char *)C_data_pointer(s2) + C_unfix(start2), \
                                                    (C_char *)C_data_pointer(s1) + C_unfix(start1), \
@@ -1702,7 +1702,7 @@ C_fctexport C_word C_fcall C_mutate_slot(C_word *slot, C_word val) C_regparm;
 C_fctexport void C_fcall C_reclaim(void *trampoline, C_word c) C_regparm C_noret;
 C_fctexport void C_save_and_reclaim(void *trampoline, int n, C_word *av) C_noret;
 C_fctexport void C_save_and_reclaim_args(void *trampoline, int n, ...) C_noret;
-C_fctexport void C_fcall C_rereclaim2(C_uword size, int double_plus) C_regparm;
+C_fctexport void C_fcall C_rereclaim2(C_uword size, int relative_resize) C_regparm;
 C_fctexport void C_unbound_variable(C_word sym);
 C_fctexport C_word C_fcall C_retrieve2(C_word val, char *name) C_regparm;
 C_fctexport void *C_fcall C_retrieve2_symbol_proc(C_word val, char *name) C_regparm;
@@ -1882,6 +1882,11 @@ C_fctexport C_word C_fcall C_i_not_pair_p_2(C_word x) C_regparm;
 C_fctexport C_word C_fcall C_i_null_list_p(C_word x) C_regparm;
 C_fctexport C_word C_fcall C_i_string_null_p(C_word x) C_regparm;
 C_fctexport C_word C_fcall C_i_null_pointerp(C_word x) C_regparm;
+C_fctexport C_word C_fcall C_i_char_equalp(C_word x, C_word y) C_regparm;
+C_fctexport C_word C_fcall C_i_char_greaterp(C_word x, C_word y) C_regparm;
+C_fctexport C_word C_fcall C_i_char_lessp(C_word x, C_word y) C_regparm;
+C_fctexport C_word C_fcall C_i_char_greater_or_equal_p(C_word x, C_word y) C_regparm;
+C_fctexport C_word C_fcall C_i_char_less_or_equal_p(C_word x, C_word y) C_regparm;
 C_fctexport C_word C_fcall C_i_locative_set(C_word loc, C_word x) C_regparm;
 C_fctexport C_word C_fcall C_i_locative_to_object(C_word loc) C_regparm;
 C_fctexport C_word C_fcall C_a_i_make_locative(C_word **a, int c, C_word type, C_word object, C_word index, C_word weak) C_regparm;
@@ -2455,7 +2460,6 @@ C_fast_retrieve(C_word sym)
 
   return val;
 }
-
 
 C_inline void *
 C_fast_retrieve_proc(C_word closure)

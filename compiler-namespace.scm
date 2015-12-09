@@ -216,7 +216,6 @@
  optimization-iterations
  original-program-size
  output
- parameter-limit
  pending-canonicalizations
  perform-closure-conversion
  perform-cps-conversion
@@ -266,7 +265,7 @@
  simplified-ops
  simplify-named-call
  simplify-type
- slashify
+ backslashify
  sort-symbols
  source-filename
  source-info->string

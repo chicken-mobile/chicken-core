@@ -6,7 +6,7 @@
   (c) 2008-2015, The CHICKEN Team
   (c) 2000-2007, Felix L. Winkelmann
 
-  version 4.9.1
+  version 4.10.1
 
 
  1. Introduction
@@ -35,9 +35,9 @@
         4. Loads of extra libraries.
 
         Note: Should you have any trouble in setting up and using
-        CHICKEN, please ask questions on the CHICKEN mailing list. You
-        can subscribe to the list from the CHICKEN homepage,
-        http://www.call-with-current-continuation.org)
+        CHICKEN, please ask questions on the CHICKEN users mailing
+        list.  Check http://wiki.call-cc.org/discussion-groups for
+        information on how to subscribe to CHICKEN mailing lists.
 
 
  2. Installation
@@ -282,7 +282,7 @@
 	|       `-- chicken.h
 	|-- lib
 	|   |-- chicken
-	|   |   `-- 7
+	|   |   `-- 8
 	|   |       |-- chicken.import.so
 	|   |       |-- csi.import.so
 	|   |       |-- data-structures.import.so
@@ -310,8 +310,8 @@
 	|   |-- libchicken.a
 	|   |-- libchicken.dll.a                      (Windows)
 	|   |-- libchicken.dylib                      (Macintosh)
-	|   |-- libchicken.so -> libchicken.so.6      (Unix)
-	|   `-- libchicken.so.6			      (Unix)
+	|   |-- libchicken.so -> libchicken.so.8      (Unix)
+	|   `-- libchicken.so.8			      (Unix)
 	`-- share
 	    |-- chicken
 	    |   |-- doc
@@ -412,6 +412,9 @@
 	    an existing CHICKEN installation in the /usr/pkg prefix.
 
         Linux:
+
+	  - If you want to build Linux binaries which use the "X32 ABI",
+	    you can pass ARCH=x32 on the Make command line.
 
 	  - Some old Linux distributions ship with a buggy version of
 	    the GNU C compiler (2.96). If the system is configured for

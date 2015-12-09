@@ -387,25 +387,32 @@ EOF
   ((foreign-lambda void "C_prepare_fdset" int) (##sys#length ##sys#fd-list))
   (let loop ((lst ##sys#fd-list))
     (unless (null? lst)
-      (let ((fd (caar lst)))
+      (let ((fd (caar lst))
+	    (input #f)
+	    (output #f))
 	(for-each
 	 (lambda (t)
 	   (let ((p (##sys#slot t 11)))
-             (when (pair? p) ; (FD . RWFLAGS)? (can also be mutex or thread)
-               (fdset-set fd (cdr p)))))
+	     ;; XXX: This should never be false, because otherwise the
+	     ;; thread is not supposed to be on ##sys#fd-list!
+	     (when (pair? p) ; (FD . RWFLAGS)? (can also be mutex or thread)
+	       (let ((i/o (cdr p)))
+		 (case i/o
+		   ((#t #:input)
+		    (set! input #t))
+		   ((#f #:output)
+		    (set! output #t))
+		   ((#:all)
+		    (set! input #t)
+		    (set! output #t))
+		   (else
+		    (panic
+		     (sprintf "create-fdset: invalid i/o direction: ~S (fd = ~S)" i/o fd))))))))
 	 (cdar lst))
+	;; Our position in fd-list must match fdset array position, so
+	;; always add an fdset entry, even if input & output are #f.
+	((foreign-lambda void "C_fdset_add" int bool bool) fd input output)
 	(loop (cdr lst))))))
-
-(define (fdset-set fd i/o)
-  (let ((fdset-add! (foreign-lambda void "C_fdset_add" int bool bool)))
-    (dbg "setting fdset for " fd " to " i/o)
-    (case i/o
-      ((#t #:input) (fdset-add! fd #t #f))
-      ((#f #:output) (fdset-add! fd #f #t))
-      ((#:all) (fdset-add! fd #t #t))
-      (else
-       (panic
-        (sprintf "fdset-set: invalid i/o direction: ~S (fd = ~S)" i/o fd))))))
 
 (define (fdset-test inf outf i/o)
   (case i/o
